@@ -1,0 +1,17 @@
+[project]
+name = "llama-server-home"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.135.1",
+    "loguru>=0.7.3",
+    "pydantic>=2.12.5",
+    "pymongo>=4.16.0",
+    "pyyaml>=6.0.3",
+    "uvicorn>=0.41.0",
+]
+
+[project.scripts]
+list-nodes = "lsh.controller.cmd:list_nodes"
