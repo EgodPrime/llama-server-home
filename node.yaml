@@ -1,0 +1,6 @@
+mongodb_url: "mongodb://localhost:27017"
+mongodb_name: "lsh"
+heartbeat_interval: 5 # seconds
+name: "local_node"
+ip_address: "localhost"
+llama_path: "/home/egod/llama.cpp/build/bin/llama-server"

@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
-from datetime import datetime
 import uuid
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, computed_field
+
 
 class Node(BaseModel):
     name: str
     ip_address: str
     llama_path: str
-    status: str # "ONLINE|OFFLINE"
+    status: str  # "ONLINE|OFFLINE"
     last_heartbeat: float
     registered_at: float
 
@@ -18,9 +19,13 @@ class Node(BaseModel):
     @property
     def node_id(self) -> str:
         return f"{self.name}@{self.ip_address}"
-    
+
     def __repr__(self):
         return f"Node(name={self.name}, ip_address={self.ip_address}, status={self.status})"
+
+    def __str__(self):
+        return self.__repr__()
+
 
 class CreateInstanceTask(BaseModel):
     task_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -71,6 +76,7 @@ class Instance(BaseModel):
     started_at: Optional[datetime] = None
     last_stopped_at: Optional[datetime] = None
 
+
 class ManageInstanceTask(BaseModel):
     task_id: str
     type: str  # RESTART | STOP | START | DESTROY | MODIFY
@@ -100,11 +106,13 @@ class CPUInfo(BaseModel):
     usage_percent: float
     cores_count: int
 
+
 class MemoryInfo(BaseModel):
     total_mb: float
     used_mb: float
     free_mb: float
     usage_percent: float
+
 
 class GPUInfo(BaseModel):
     id: int
@@ -116,7 +124,7 @@ class GPUInfo(BaseModel):
     memory_free_mb: float
 
 
-class Metrics(BaseModel):
+class Metric(BaseModel):
     node_id: str
     timestamp: float
     cpu: CPUInfo
@@ -130,6 +138,5 @@ __all__ = [
     "Instance",
     "ManageInstanceTask",
     "Log",
-    "Metrics",
+    "Metric",
 ]
-
