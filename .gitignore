@@ -9,3 +9,7 @@ wheels/
 # Virtual environments
 .venv
 .ruff_cache
+
+# config files
+controller.yaml
+node.yaml

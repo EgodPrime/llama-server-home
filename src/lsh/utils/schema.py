@@ -131,6 +131,20 @@ class Metric(BaseModel):
     memory: MemoryInfo
     gpus: List[GPUInfo]
 
+    def __repr__(self):
+        res = f"CPU({self.cpu.cores_count} logic cores): {self.cpu.usage_percent:.1f}%\n"
+        res += f"Memory: {self.memory.used_mb:.1f}MB/{self.memory.total_mb:.1f}MB ({self.memory.usage_percent:.1f}%)\n"
+        if self.gpus:
+            res += "GPUs:\n"
+            for gpu in self.gpus:
+                res += f"  GPU {gpu.id} ({gpu.model}): {gpu.memory_used_mb:.1f}MB/{gpu.memory_total_mb:.1f}MB\n"
+        else:
+            res += "No GPU detected.\n"
+        return res
+
+    def __str__(self):
+        return self.__repr__()
+
 
 __all__ = [
     "Node",
