@@ -136,7 +136,7 @@ class NodeAgent:
                         cmd += f" --mmproj {self.nfs_path / task.mmproj_path}"
                     cmd += f" --host {self.node.ip_address} --port {task.port}"
                     for k, v in task.config.items():
-                        cmd += f" --{k} {v}"
+                        cmd += f" {k} {v}"
                     log_file = f"/tmp/{task.instance_name}.log"
                     cmd += f" > {log_file} 2>&1 &"
                     subprocess.run(cmd, shell=True, timeout=60)
