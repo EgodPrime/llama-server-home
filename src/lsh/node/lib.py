@@ -197,6 +197,8 @@ class NodeAgent:
         th_maintenance = threading.Thread(target=self.sel_maintenance, daemon=True)
         th_handle_create_instance_task = threading.Thread(target=self.handle_create_instance_task, daemon=True)
 
-        # 启动线程，因为都是守护线程，所以主线程不需要等待它们join
+        # 启动线程
         th_maintenance.start()
         th_handle_create_instance_task.start()
+
+        th_maintenance.join()
