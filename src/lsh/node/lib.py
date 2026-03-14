@@ -126,22 +126,24 @@ class NodeAgent:
             for inst_doc in instances:
                 instance = Instance.model_validate(inst_doc)
                 err_msg = None
-                if instance.status == "RUNNING":
-                    try:
-                        proc = psutil.Process(instance.pid)
-                        if proc.is_running():
-                            # 还可以进一步检查端口是否在监听
-                            if not proc.net_connections():
-                                raise RuntimeError("Process is running but not listening on any port")
-                        else:
+                alive = False
+                try:
+                    proc = psutil.Process(instance.pid)
+                    if proc.is_running():
+                        # 还可以进一步检查端口是否在监听
+                        if not proc.net_connections():
+                            raise RuntimeError("Process is running but not listening on any port")
+                        alive = True
+                    else:
+                        if instance.status == "RUNNING":
                             raise RuntimeError("Process is not running")
-                    except Exception as e:
-                        err_msg = str(e)
-                        logger.warning(f"Instance {instance.instance_name} on node {self.node.node_id} failed: {e}")
-                    finally:
-                        col.update_one(
-                            {"_id": inst_doc["_id"]},
-                            {"$set": {"status": "ERROR" if err_msg else "RUNNING", "last_heartbeat": time.time(), "last_error": err_msg}},
+                except Exception as e:
+                    err_msg = str(e)
+                    logger.warning(f"Instance {instance.instance_name} on node {self.node.node_id} failed: {e}")
+                finally:
+                    col.update_one(
+                        {"_id": inst_doc["_id"]},
+                        {"$set": {"status": "RUNNING" if alive else "ERROR", "last_heartbeat": time.time(), "last_error": err_msg}},
                         )
             elapsed = time.time() - t0
             time.sleep(max(0, self.heartbeat_interval - elapsed))
@@ -164,25 +166,26 @@ class NodeAgent:
                     col.update_one(
                         {"task_id": task.task_id}, {"$set": {"status": "PROCESSING", "started_at": time.time()}}
                     )
-                    cmd = f"{self.node.llama_path} --model {self.nfs_path / task.model_path}"
-                    if task.mmproj_path:
-                        cmd += f" --mmproj {self.nfs_path / task.mmproj_path}"
-                    cmd += f" --host {self.node.ip_address} --port {task.port}"
-                    for k, v in task.config.items():
-                        cmd += f" {k} {v}"
                     log_file = f"/tmp/{task.instance_name}.log"
-                    subprocess.Popen(cmd, 
+                    cmd_list = [
+                        str(self.node.llama_path),
+                        "--model", str(self.nfs_path / task.model_path),
+                        "--host", self.node.ip_address,
+                        "--port", str(task.port),
+                    ]
+                    if task.mmproj_path:
+                        cmd_list += ["--mmproj", str(self.nfs_path / task.mmproj_path)]
+                    for k, v in task.config.items():
+                        cmd_list += [k, str(v)]
+                    process = subprocess.Popen(cmd_list, 
                                      env=task.env, 
                                      stdout=open(log_file, "w"),
                                      stderr=subprocess.STDOUT,
                                      start_new_session=True, 
                                      preexec_fn=os.setsid)
-                    find_pid_cmd = f"pgrep -f '{cmd}'"
-                    pid_result = subprocess.run(find_pid_cmd, shell=True, capture_output=True, text=True)
-                    if pid_result.returncode == 0:
-                        pid = int(pid_result.stdout.strip())
-                    else:
-                        raise RuntimeError(f"Failed to find PID for command: {cmd}")
+                 
+               
+                    pid = process.pid
                     logger.info(f"Node {self.node.node_id} successfully handled task: {task.task_id}")
                     result = "FINISHED"
                 except Exception as e:
