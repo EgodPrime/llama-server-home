@@ -37,7 +37,7 @@ def measure_gpu() -> List[GPUInfo]:
             mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
             gpu_info = GPUInfo(
                 id=i,
-                model=pynvml.nvmlDeviceGetName(handle).decode('utf-8', errors='replace'),
+                model=pynvml.nvmlDeviceGetName(handle).decode(),
                 temperature_c=pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU),
                 power_draw_w=pynvml.nvmlDeviceGetPowerUsage(handle) / 1000,
                 memory_total_mb=mem_info.total / (1024 * 1024),
