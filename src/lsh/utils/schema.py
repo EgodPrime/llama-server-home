@@ -44,22 +44,21 @@ class CreateInstanceTask(BaseModel):
     FAILED:   任务执行失败 (网络错误等)
     """
     status: Optional[str] = None
-
-    created_at: Optional[float] = Field(default_factory=time.time)
-    started_at: Optional[float] = None
-    finished_at: Optional[float] = None
-
     error_msg: Optional[str] = None
 
     env: Optional[Dict[str, str]] = None
     config: Optional[Dict[str, Any]] = None
+
+    created_at: Optional[float] = Field(default_factory=time.time)
+    started_at: Optional[float] = None
+    finished_at: Optional[float] = None
 
 
 class Instance(BaseModel):
     instance_name: str
     node_id: str
 
-    status: Optional[str] = None  # RUNNING|STOPPED|ERROR|RESTARTING
+    status: Optional[str] = None  # RUNNING|STOPPED|ERROR
 
     pid: Optional[int] = None
     host: Optional[str] = None
@@ -83,11 +82,17 @@ class Instance(BaseModel):
 
 
 class ManageInstanceTask(BaseModel):
-    task_id: str
-    type: str  # RESTART | STOP | START | DESTROY | MODIFY
+    task_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    type: str  # STOP | RESUME | MODIFY
     instance_name: str
     node_id: str
-    triggered_by: Optional[str] = None  # USER | SYSTEM
+
+    """
+    INIT:     任务已创建，等待 Agent 领取
+    PROCESSING: Agent 已领取任务，正在执行停止、恢复或修改操作
+    FINISHED: 操作已完成，实例状态已更新
+    FAILED:   任务执行失败 (网络错误等)
+    """
     status: Optional[str] = None
     error_msg: Optional[str] = None
 

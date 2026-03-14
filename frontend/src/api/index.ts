@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Node, Metric, CreateInstanceTask } from '../types/index.js';
+import { Node, Metric, CreateInstanceTask, Instance, ManageInstanceTask } from '../types/index.js';
 
 // 获取节点列表
 export async function listNodes(): Promise<Node[]> {
@@ -27,9 +27,40 @@ export async function listCreateInstanceTasks(): Promise<CreateInstanceTask[]> {
 
 // 删除创建实例任务
 export async function deleteCreateInstanceTask(taskId: string): Promise<{ message: string; task_id: string }> {
-	const res = await axios.delete(`/api/tasks/delete_create_instance_task/${taskId}`);
+	const res = await axios.post(`/api/tasks/delete_create_instance_task/${taskId}`);
 	return res.data;
 }
+
+// 获取实例列表
+export async function listInstances(): Promise<Instance[]> {
+	const res = await axios.get('/api/instances/list_instances');
+	return res.data;
+}
+
+// 删除实例
+export async function deleteInstance(nodeId: string, instanceName: string): Promise<{ message: string }> {
+	const res = await axios.post(`/api/instances/delete_instance/${nodeId}/${instanceName}`);
+	return res.data;
+}
+
+// 停止实例
+export async function stopInstance(nodeId: string, instanceName: string): Promise<{ message: string; task_id: string }> {
+	const res = await axios.post(`/api/instances/stop_instance/${nodeId}/${instanceName}`);
+	return res.data;
+}
+
+// 恢复实例
+export async function resumeInstance(nodeId: string, instanceName: string): Promise<{ message: string; task_id: string }> {
+	const res = await axios.post(`/api/instances/resume_instance/${nodeId}/${instanceName}`);
+	return res.data;
+}
+
+// 修改实例配置
+export async function modifyInstance(mit: ManageInstanceTask): Promise<{ message: string; task_id: string }> {
+	const res = await axios.post('/api/instances/modify_instance', mit);
+	return res.data;
+}
+
 
 // NFS API
 export async function listNfsRoot(): Promise<any[]> {

@@ -2,7 +2,7 @@ import fastapi
 import os
 from lsh.controller.lib import Controller, CreateInstanceTask
 from lsh.repo.metrics import get_metrics_last_n
-from lsh.utils.schema import Instance
+from lsh.utils.schema import Instance, ManageInstanceTask
 
 app = fastapi.FastAPI()
 controller = Controller()
@@ -72,7 +72,7 @@ async def list_nfs_models():
             models.append(model_info)
     return models
 
-
+# 创建实例任务列表
 @app.get("/tasks/list_create_instance_tasks")
 async def list_create_instance_tasks():
     col = controller.db["create_instance_tasks"]
@@ -81,7 +81,7 @@ async def list_create_instance_tasks():
 
 
 # 删除创建实例任务
-@app.delete("/tasks/delete_create_instance_task/{task_id}")
+@app.post("/tasks/delete_create_instance_task/{task_id}")
 async def delete_create_instance_task(task_id: str):
     col = controller.db["create_instance_tasks"]
     result = col.delete_one({"task_id": task_id})
@@ -90,13 +90,59 @@ async def delete_create_instance_task(task_id: str):
     else:
         return fastapi.HTTPException(status_code=404, detail="Task not found")
 
-
+# 实例列表
 @app.get("/instances/list_instances")
 async def list_instances():
     col = controller.db["instances"]
     instances = col.find().sort("created_at", -1)
-    # 转换为dict并去掉MongoDB自动生成的_id字段
     return [Instance.model_validate(instance).model_dump() for instance in instances]
+
+
+# 删除实例
+@app.post("/instances/delete_instance/{node_id}/{instance_name}")
+async def delete_instance(node_id:str, instance_name: str):
+    col = controller.db["instances"]
+    result = col.delete_one({"node_id": node_id, "instance_name": instance_name})
+    if result.deleted_count == 1:
+        return {"message": f"Instance {instance_name}@{node_id} deleted"} 
+    else:
+        return fastapi.HTTPException(status_code=404, detail="Instance not found")
+    
+# 停止实例
+@app.post("/instances/stop_instance/{node_id}/{instance_name}")
+async def stop_instance(node_id:str, instance_name: str):
+    col = controller.db["manage_instance_tasks"]
+    mit = ManageInstanceTask(
+        type="STOP",
+        instance_name=instance_name,
+        node_id=node_id,
+        status="INIT"
+    )
+    col.insert_one(mit.model_dump())
+    return {"message": f"Instance {instance_name}@{node_id} stop task created", "task_id": mit.task_id}
+
+# 恢复实例
+@app.post("/instances/resume_instance/{node_id}/{instance_name}")
+async def resume_instance(node_id:str, instance_name: str):
+    col = controller.db["manage_instance_tasks"]
+    mit = ManageInstanceTask(
+        type="RESUME",
+        instance_name=instance_name,
+        node_id=node_id,
+        status="INIT"
+    )
+    col.insert_one(mit.model_dump())
+    return {"message": f"Instance {instance_name}@{node_id} resume task created", "task_id": mit.task_id}
+
+# 修改实例配置
+@app.post("/instances/modify_instance")
+async def modify_instance(mit: ManageInstanceTask):
+    col = controller.db["manage_instance_tasks"]
+    mit.status = "INIT"
+    col.insert_one(mit.model_dump())
+    return {"message": "Instance modify task created", "task_id": mit.task_id}
+
+
 
 if __name__ == "__main__":
     import uvicorn

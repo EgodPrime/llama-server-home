@@ -12,7 +12,7 @@ import yaml
 from loguru import logger
 
 from lsh.utils.path_helper import NODE_CONFIG_PATH
-from lsh.utils.schema import CPUInfo, CreateInstanceTask, GPUInfo, Instance, MemoryInfo, Metric, Node
+from lsh.utils.schema import CPUInfo, CreateInstanceTask, GPUInfo, Instance, ManageInstanceTask, MemoryInfo, Metric, Node
 
 
 def measure_cpu() -> CPUInfo:
@@ -142,7 +142,7 @@ class NodeAgent:
                         if not works_fine:
                             cfg["status"] = "ERROR"
                             cfg["last_error"] = err_msg
-                    case "RESTARTING", "ERROR", "STOPPED":
+                    case "ERROR", "STOPPED":
                         if works_fine:
                             cfg["status"] = "RUNNING"
                             cfg["last_error"] = None
@@ -232,6 +232,90 @@ class NodeAgent:
             else:
                 time.sleep(5)
 
+    def stop_instance(self, instance: Instance):
+        try:
+            psutil.Process(instance.pid).kill()
+        except Exception:
+            pass
+        col = self.db["instances"]
+        col.update_one(
+            {"node_id": instance.node_id, "instance_name": instance.instance_name},
+            {"$set": {"status": "STOPPED", "last_error": None}}
+        )
+
+    def resume_instance(self, instance: Instance):
+        log_file = f"/tmp/{instance.instance_name}.log"
+        cmd_list = [
+            str(self.node.llama_path),
+            "--model", str(self.nfs_path / instance.model_path),
+            "--host", self.node.ip_address,
+            "--port", str(instance.port),
+        ]
+        if instance.mmproj_path:
+            cmd_list += ["--mmproj", str(self.nfs_path / instance.mmproj_path)]
+        for k, v in instance.config.items():
+            cmd_list += [k, str(v)]
+        process = subprocess.Popen(cmd_list, 
+                                 env=instance.env, 
+                                 stdout=open(log_file, "w"),
+                                 stderr=subprocess.STDOUT,
+                                 start_new_session=True)
+        new_pid = process.pid
+        col = self.db["instances"]
+        col.update_one(
+            {"node_id": instance.node_id, "instance_name": instance.instance_name},
+            {"$set": {"status": "RUNNING", "pid": new_pid, "last_error": None}}
+        )
+
+    def handle_manage_instance_task(self):
+        col = self.db["manage_instance_tasks"]
+        while True:
+            task_doc = col.find_one(
+                {"node_id": self.node.node_id, "status": "INIT"},
+                sort=[("created_at", pymongo.ASCENDING)],
+            )
+            if task_doc:
+                task = ManageInstanceTask.model_validate(task_doc)
+                err_msg = None
+                result = None
+                try:
+                    logger.info(f"Node {self.node.node_id} handling manage instance task: {task.task_id}")
+                    col.update_one(
+                        {"task_id": task.task_id}, {"$set": {"status": "PROCESSING", "started_at": time.time()}}
+                    )
+                    instance_doc = self.db["instances"].find_one({"node_id": task.node_id, "instance_name": task.instance_name})
+                    if not instance_doc:
+                        raise RuntimeError(f"Instance {task.instance_name} not found on node {task.node_id}")
+                    instance = Instance.model_validate(instance_doc)
+                    # 根据任务类型执行相应操作
+                    match task.type:
+                        case "STOP":
+                            self.stop_instance(instance)
+                        case "RESUME":
+                            # 恢复实例：重新启动一个新的进程，更新实例状态为RUNNING
+                            self.resume_instance(instance)
+                        case "MODIFY":
+                            # 修改实例配置：先停止实例，修改配置后再恢复实例
+                            self.stop_instance(instance)
+                            instance.env.update(task.env_override or {})
+                            instance.config.update(task.config_override or {})
+                            self.resume_instance(instance)
+                        case _:
+                            raise RuntimeError(f"Unknown manage instance task type: {task.type}")
+                    logger.info(f"Node {self.node.node_id} successfully handled manage instance task: {task.task_id}")
+                    result = "FINISHED"
+                except Exception as e:
+                    err_msg = str(e)
+                    logger.warning(f"Node {self.node.node_id} failed to handle manage instance task: {task.task_id}")
+                    result = "FAILED"
+                finally:
+                    col.update_one(
+                        {"task_id": task.task_id},
+                        {"$set": {"status": result, "finished_at": time.time(), "error_msg": err_msg}},
+                    )
+            else:
+                time.sleep(5)
+                
     def run(self):
         self.register_self()
 
