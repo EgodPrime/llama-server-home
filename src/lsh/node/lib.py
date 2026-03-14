@@ -323,10 +323,12 @@ class NodeAgent:
         th_self_maintenance = threading.Thread(target=self.self_maintenance, daemon=True)
         th_handle_create_instance_task = threading.Thread(target=self.handle_create_instance_task, daemon=True)
         th_instance_maintenance = threading.Thread(target=self.instance_maintenance, daemon=True)
+        th_handle_manage_instance_task = threading.Thread(target=self.handle_manage_instance_task, daemon=True)
 
         # 启动线程
         th_self_maintenance.start()
         th_handle_create_instance_task.start()
         th_instance_maintenance.start()
+        th_handle_manage_instance_task.start()
 
         th_self_maintenance.join()
