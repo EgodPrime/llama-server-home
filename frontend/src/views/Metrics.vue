@@ -3,20 +3,25 @@
     <h2>节点 {{ nodeId }} 的资源情况</h2>
     <!-- CPU 和 RAM 并排 -->
     <div class="row">
-      <div class="card" style="flex:1; margin-right:16px;">
+      <div class="card" style="flex: 1; margin-right: 16px">
         <h3>CPU</h3>
         <div id="cpu-chart" class="chart"></div>
       </div>
-      <div class="card" style="flex:1; margin-left:16px;">
+      <div class="card" style="flex: 1; margin-left: 16px">
         <h3>RAM</h3>
         <div id="ram-chart" class="chart"></div>
       </div>
     </div>
     <!-- GPUs 每两个一排 -->
     <div>
-      <h3 style="color:#FA541C; margin-bottom:12px;">GPUs</h3>
+      <h3 style="color: #fa541c; margin-bottom: 12px">GPUs</h3>
       <div v-for="gpuPair in gpuPairs" :key="gpuPair[0]?.id || gpuPair[1]?.id" class="gpu-row">
-        <div v-for="gpu in gpuPair" :key="gpu.id" class="card gpu-card" style="flex:1; margin:0 8px;">
+        <div
+          v-for="gpu in gpuPair"
+          :key="gpu.id"
+          class="card gpu-card"
+          style="flex: 1; margin: 0 8px"
+        >
           <h3>{{ gpu.id }}: {{ gpu.model }}</h3>
           <div :id="'gpu-chart-' + gpu.id" class="chart"></div>
         </div>
@@ -42,9 +47,9 @@ var gpuLines: { [gpuId: number]: Line } = {};
 // 计算GPU每两个一组
 import { computed } from 'vue';
 const gpuPairs = computed(() => {
-  const arr:GPUInfo[][] = [];
+  const arr: GPUInfo[][] = [];
   for (let i = 0; i < gpuData.value.length; i += 2) {
-    arr.push([gpuData.value[i], gpuData.value[i+1]].filter(Boolean));
+    arr.push([gpuData.value[i], gpuData.value[i + 1]].filter(Boolean));
   }
   return arr;
 });
@@ -72,19 +77,21 @@ onUnmounted(() => {
 function renderCharts() {
   if (!metrics.value.length) return;
   // 按 timestamp 升序排序
-  const sortedMetrics: Metric[] = [...metrics.value].sort((a: any, b: any) => a.timestamp - b.timestamp);
+  const sortedMetrics: Metric[] = [...metrics.value].sort(
+    (a: any, b: any) => a.timestamp - b.timestamp
+  );
   // 计算最新时间戳
   const latest = Math.max(...sortedMetrics.map((item: any) => item.timestamp));
-  
 
   // CPU chart
   if (document.getElementById('cpu-chart')) {
     const cpuData = sortedMetrics.map((item: any) => ({
-    x: item.timestamp === latest
-      ? new Date(item.timestamp * 1000).toLocaleString('zh-CN', { hour12: false })
-      : `${Math.round(latest - item.timestamp)}秒前`,
-    CPU: item.cpu.usage_percent,
-  }));
+      x:
+        item.timestamp === latest
+          ? new Date(item.timestamp * 1000).toLocaleString('zh-CN', { hour12: false })
+          : `${Math.round(latest - item.timestamp)}秒前`,
+      CPU: item.cpu.usage_percent,
+    }));
     const new_config = {
       data: cpuData,
       xField: 'x',
@@ -115,75 +122,21 @@ function renderCharts() {
   // RAM chart
   if (document.getElementById('ram-chart')) {
     const ramData = sortedMetrics.map((item: any) => ({
-    x: item.timestamp === latest
-      ? new Date(item.timestamp * 1000).toLocaleString('zh-CN', { hour12: false })
-      : `${Math.round(latest - item.timestamp)}秒前`,
-    RAM: item.memory.used_mb
-  }));
-  const MAX_RAM = sortedMetrics[0].memory.total_mb;
-  const new_config= {
-    data: ramData,
-    xField: 'x',
-    yField: 'RAM',
-    point: { size: 4, shape: 'circle' },
-    smooth: true,
-    color: '#52C41A',
-    title: { visible: true, text: 'RAM 使用量' },
-    xAxis: {
-    label: {
-        formatter: (v: any) => v,
-    },
-    type: 'cat',
-    },
-    yAxis: {
-    min: 0,
-    max: MAX_RAM,
-    label: {
-        formatter: (v: any) => `${v} MB`,
-    },
-    },
-  };
-    if(ramLine) {
-        ramLine.update(new_config);
-    } else {
-        ramLine = new Line('ram-chart', new_config);
-        ramLine.render();
-    }
-  }
-
-  // GPU charts
-  if (gpuData.value.length) {
-// 先提取出 timestamp: GPUInfo[] 的格式，方便后续处理
-  const gpuMixedDataSeq = sortedMetrics.map((item: any) => ({
-    x: item.timestamp === latest
-      ? new Date(item.timestamp * 1000).toLocaleString('zh-CN', { hour12: false })
-      : `${Math.round(latest - item.timestamp)}秒前`,
-    GPUS: item.gpus
-  }));
-  // 在转换成 GPU ID: [{x, memory_used_mb}] 的格式，方便后续每个 GPU 单独画图
-  const gpuSeqs: { [gpuId: number]: any[] } = {};
-  gpuMixedDataSeq.forEach((item: any) => {
-    item.GPUS.forEach((gpu: any) => {
-      if (!gpuSeqs[gpu.id]) gpuSeqs[gpu.id] = [];
-      gpuSeqs[gpu.id].push({
-        x: item.x,
-        memory_used_mb: gpu.memory_used_mb,
-      });
-    });
-  });
-
-  gpuMixedDataSeq[0].GPUS.forEach((gpu: any) => {
-    const gpuMaxRAM = gpu.memory_total_mb;
-    const chart_id = `gpu-chart-${gpu.id}`;
-    if (document.getElementById(chart_id) ){
-      const gpuConfig = {
-        data: gpuSeqs[gpu.id],
+      x:
+        item.timestamp === latest
+          ? new Date(item.timestamp * 1000).toLocaleString('zh-CN', { hour12: false })
+          : `${Math.round(latest - item.timestamp)}秒前`,
+      RAM: item.memory.used_mb,
+    }));
+    const MAX_RAM = sortedMetrics[0].memory.total_mb;
+    const new_config = {
+      data: ramData,
       xField: 'x',
-      yField: 'memory_used_mb',
+      yField: 'RAM',
       point: { size: 4, shape: 'circle' },
       smooth: true,
-      color: '#FA541C',
-      title: { visible: true, text: `GPU ${gpu.model} (ID: ${gpu.id}) 内存使用` },
+      color: '#52C41A',
+      title: { visible: true, text: 'RAM 使用量' },
       xAxis: {
         label: {
           formatter: (v: any) => v,
@@ -192,23 +145,77 @@ function renderCharts() {
       },
       yAxis: {
         min: 0,
-        max: gpuMaxRAM,
+        max: MAX_RAM,
         label: {
           formatter: (v: any) => `${v} MB`,
         },
       },
-    }
-    if (gpuLines[gpu.id]) {
-      gpuLines[gpu.id].update(gpuConfig);
+    };
+    if (ramLine) {
+      ramLine.update(new_config);
     } else {
-      gpuLines[gpu.id] = new Line(chart_id, gpuConfig);
-      gpuLines[gpu.id].render();
+      ramLine = new Line('ram-chart', new_config);
+      ramLine.render();
     }
-    
   }
-  });
+
+  // GPU charts
+  if (gpuData.value.length) {
+    // 先提取出 timestamp: GPUInfo[] 的格式，方便后续处理
+    const gpuMixedDataSeq = sortedMetrics.map((item: any) => ({
+      x:
+        item.timestamp === latest
+          ? new Date(item.timestamp * 1000).toLocaleString('zh-CN', { hour12: false })
+          : `${Math.round(latest - item.timestamp)}秒前`,
+      GPUS: item.gpus,
+    }));
+    // 在转换成 GPU ID: [{x, memory_used_mb}] 的格式，方便后续每个 GPU 单独画图
+    const gpuSeqs: { [gpuId: number]: any[] } = {};
+    gpuMixedDataSeq.forEach((item: any) => {
+      item.GPUS.forEach((gpu: any) => {
+        if (!gpuSeqs[gpu.id]) gpuSeqs[gpu.id] = [];
+        gpuSeqs[gpu.id].push({
+          x: item.x,
+          memory_used_mb: gpu.memory_used_mb,
+        });
+      });
+    });
+
+    gpuMixedDataSeq[0].GPUS.forEach((gpu: any) => {
+      const gpuMaxRAM = gpu.memory_total_mb;
+      const chart_id = `gpu-chart-${gpu.id}`;
+      if (document.getElementById(chart_id)) {
+        const gpuConfig = {
+          data: gpuSeqs[gpu.id],
+          xField: 'x',
+          yField: 'memory_used_mb',
+          point: { size: 4, shape: 'circle' },
+          smooth: true,
+          color: '#FA541C',
+          title: { visible: true, text: `GPU ${gpu.model} (ID: ${gpu.id}) 内存使用` },
+          xAxis: {
+            label: {
+              formatter: (v: any) => v,
+            },
+            type: 'cat',
+          },
+          yAxis: {
+            min: 0,
+            max: gpuMaxRAM,
+            label: {
+              formatter: (v: any) => `${v} MB`,
+            },
+          },
+        };
+        if (gpuLines[gpu.id]) {
+          gpuLines[gpu.id].update(gpuConfig);
+        } else {
+          gpuLines[gpu.id] = new Line(chart_id, gpuConfig);
+          gpuLines[gpu.id].render();
+        }
+      }
+    });
   }
-    
 }
 </script>
 
@@ -227,23 +234,23 @@ function renderCharts() {
 /* 页面整体美化 */
 h2 {
   margin-bottom: 24px;
-  color: #1979C6;
+  color: #1979c6;
   font-weight: 700;
   letter-spacing: 1px;
 }
 .card {
   background: linear-gradient(135deg, #f8fafc 60%, #e6f7ff 100%);
   border-radius: 16px;
-  box-shadow: 0 4px 16px rgba(25,121,198,0.10);
+  box-shadow: 0 4px 16px rgba(25, 121, 198, 0.1);
   padding: 32px 28px;
   margin-bottom: 32px;
   transition: box-shadow 0.2s;
 }
 .card:hover {
-  box-shadow: 0 8px 32px rgba(25,121,198,0.18);
+  box-shadow: 0 8px 32px rgba(25, 121, 198, 0.18);
 }
 .card h3 {
-  color: #52C41A;
+  color: #52c41a;
   font-size: 22px;
   margin-bottom: 18px;
   font-weight: 600;
@@ -254,7 +261,7 @@ h2 {
   margin-bottom: 24px;
   border-radius: 8px;
   background: #fff;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 .gpu-card {
   margin-bottom: 24px;
@@ -262,7 +269,7 @@ h2 {
   border-bottom: 1px dashed #cfd8dc;
 }
 .gpu-card h3 {
-  color: #FA541C;
+  color: #fa541c;
   font-size: 18px;
   margin-bottom: 12px;
   font-weight: 500;

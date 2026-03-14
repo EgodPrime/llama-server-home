@@ -6,7 +6,7 @@ from loguru import logger
 
 from lsh.repo.node import find_nodes_all
 from lsh.utils.path_helper import CONTROLLER_CONFIG_PATH
-from lsh.utils.schema import CreateInstanceTask, Node
+from lsh.utils.schema import Node
 
 
 class Controller:
@@ -32,7 +32,3 @@ class Controller:
         col = self.db["nodes"]
         nodes = find_nodes_all(col)
         return nodes
-
-    def create_instance_task(self, task: CreateInstanceTask):
-        col = self.db["create_instance_tasks"]
-        col.insert_one(task.model_dump())

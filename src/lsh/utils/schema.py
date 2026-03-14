@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import uuid
 import time
+import uuid
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, computed_field
@@ -25,33 +25,6 @@ class Node(BaseModel):
 
     def __str__(self):
         return self.__repr__()
-
-
-class CreateInstanceTask(BaseModel):
-    task_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    type: str  # DEPLOY | CANCEL
-    instance_name: str
-    node_id: str
-    port: int
-
-    model_path: str
-    mmproj_path: Optional[str] = None
-
-    """
-    INIT:     任务已创建，等待 Agent 领取
-    PROCESSING: Agent 已领取任务，正在执行部署或取消操作
-    FINISHED: 模型已就绪，Agent 已启动服务 (或停止操作完成)
-    FAILED:   任务执行失败 (网络错误等)
-    """
-    status: Optional[str] = None
-    error_msg: Optional[str] = None
-
-    env: Optional[Dict[str, str]] = None
-    config: Optional[Dict[str, Any]] = None
-
-    created_at: Optional[float] = Field(default_factory=time.time)
-    started_at: Optional[float] = None
-    finished_at: Optional[float] = None
 
 
 class Instance(BaseModel):
@@ -81,23 +54,27 @@ class Instance(BaseModel):
     last_stopped_at: Optional[float] = None
 
 
-class ManageInstanceTask(BaseModel):
+class InstanceTask(BaseModel):
     task_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    type: str  # STOP | RESUME | MODIFY
+    type: str  # DEPLOY | STOP | RESUME | MODIFY
     instance_name: str
     node_id: str
+    port: Optional[int] = None
+
+    model_path: Optional[str] = None
+    mmproj_path: Optional[str] = None
 
     """
     INIT:     任务已创建，等待 Agent 领取
-    PROCESSING: Agent 已领取任务，正在执行停止、恢复或修改操作
-    FINISHED: 操作已完成，实例状态已更新
+    PROCESSING: Agent 已领取任务，正在执行部署或取消操作
+    FINISHED: 模型已就绪，Agent 已启动服务 (或停止操作完成)
     FAILED:   任务执行失败 (网络错误等)
     """
     status: Optional[str] = None
     error_msg: Optional[str] = None
 
-    env_override: Optional[Dict[str, str]] = None
-    config_override: Optional[Dict[str, Any]] = None
+    env: Optional[Dict[str, str]] = None
+    config: Optional[Dict[str, Any]] = None
 
     created_at: Optional[float] = Field(default_factory=time.time)
     started_at: Optional[float] = None
@@ -158,9 +135,8 @@ class Metric(BaseModel):
 
 __all__ = [
     "Node",
-    "CreateInstanceTask",
+    "InstanceTask",
     "Instance",
-    "ManageInstanceTask",
     "Log",
     "Metric",
 ]

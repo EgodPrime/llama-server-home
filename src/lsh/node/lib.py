@@ -1,63 +1,17 @@
-import os
 import pathlib
 import subprocess
 import threading
 import time
-from typing import Any, List
+from typing import Any
 
 import psutil
 import pymongo
-import pynvml
 import yaml
 from loguru import logger
 
+from lsh.node.metrics import measure_cpu, measure_gpu, measure_memory
 from lsh.utils.path_helper import NODE_CONFIG_PATH
-from lsh.utils.schema import CPUInfo, CreateInstanceTask, GPUInfo, Instance, ManageInstanceTask, MemoryInfo, Metric, Node
-
-
-def measure_cpu() -> CPUInfo:
-    usage_percent = psutil.cpu_percent(interval=1)
-    cores_count = psutil.cpu_count(logical=True)
-    return CPUInfo(usage_percent=usage_percent, cores_count=cores_count)
-
-
-def measure_memory() -> MemoryInfo:
-    memory = psutil.virtual_memory()
-    return MemoryInfo(
-        total_mb=memory.total / (1024 * 1024),
-        used_mb=memory.used / (1024 * 1024),
-        free_mb=memory.free / (1024 * 1024),
-        usage_percent=memory.percent,
-    )
-
-
-def measure_gpu() -> List[GPUInfo]:
-    gpus = []
-    try:
-        pynvml.nvmlInit()
-        gpu_count = pynvml.nvmlDeviceGetCount()
-
-        for i in range(gpu_count):
-            handle = pynvml.nvmlDeviceGetHandleByIndex(i)
-            mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-            gpu_info = GPUInfo(
-                id=i,
-                model=pynvml.nvmlDeviceGetName(handle),
-                temperature_c=pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU),
-                power_draw_w=pynvml.nvmlDeviceGetPowerUsage(handle) / 1000,
-                memory_total_mb=mem_info.total / (1024 * 1024),
-                memory_used_mb=mem_info.used / (1024 * 1024),
-                memory_free_mb=mem_info.free / (1024 * 1024),
-            )
-            gpus.append(gpu_info)
-    except pynvml.NVMLError:
-        pass
-    finally:
-        try:
-            pynvml.nvmlShutdown()
-        except pynvml.NVMLError:
-            pass
-    return gpus
+from lsh.utils.schema import Instance, InstanceTask, Metric, Node
 
 
 class NodeAgent:
@@ -150,87 +104,47 @@ class NodeAgent:
 
             elapsed = time.time() - t0
             time.sleep(max(0, self.heartbeat_interval - elapsed))
-            
 
-    def handle_create_instance_task(self):
-        col = self.db["create_instance_tasks"]
-        while True:
-            task_doc = col.find_one(
-                {"node_id": self.node.node_id, "status": "INIT"},
-                sort=[("created_at", pymongo.ASCENDING)],
-            )
-            if task_doc:
-                task = CreateInstanceTask.model_validate(task_doc)
-                err_msg = None
-                result = None
-                pid = None
-                try:
-                    logger.info(f"Node {self.node.node_id} handling task: {task.task_id}")
-                    col.update_one(
-                        {"task_id": task.task_id}, {"$set": {"status": "PROCESSING", "started_at": time.time()}}
-                    )
-                    log_file = f"/tmp/{task.instance_name}.log"
-                    cmd_list = [
-                        str(self.node.llama_path),
-                        "--model", str(self.nfs_path / task.model_path),
-                        "--host", self.node.ip_address,
-                        "--port", str(task.port),
-                    ]
-                    if task.mmproj_path:
-                        cmd_list += ["--mmproj", str(self.nfs_path / task.mmproj_path)]
-                    for k, v in task.config.items():
-                        cmd_list += [k, str(v)]
-                    process = subprocess.Popen(cmd_list, 
-                                     env=task.env, 
-                                     stdout=open(log_file, "w"),
-                                     stderr=subprocess.STDOUT,
-                                     start_new_session=True)
-                 
-               
-                    pid = process.pid
-                    logger.info(f"Node {self.node.node_id} successfully handled task: {task.task_id}")
-                    result = "FINISHED"
-                except Exception as e:
-                    err_msg = str(e)
-                    logger.warning(f"Node {self.node.node_id} failed to handle task: {task.task_id}")
-                    result = "FAILED"
-                    if pid:
-                        try:
-                            psutil.Process(pid).kill()
-                        except Exception:
-                            pass
-                finally:
-                    col.update_one(
-                        {"task_id": task.task_id},
-                        {"$set": {"status": result, "finished_at": time.time(), "error_msg": err_msg}},
-                    )
-
-                if result == "FINISHED":
-                    # --- 任务完成后，创建一个新的实例记录 ---
-                    created_time = time.time() if task.status == "FINISHED" else None
-                    instance = Instance(
-                        instance_name=task.instance_name,
-                        node_id=task.node_id,
-                        status="RUNNING",
-                        pid=pid,
-                        host=self.node.ip_address,
-                        port=task.port,
-                        model_path=str(task.model_path),
-                        local_model_path=str(self.nfs_path / task.model_path),
-                        mmproj_path=str(task.mmproj_path) if task.mmproj_path else None,
-                        local_mmproj_path=str(self.nfs_path / task.mmproj_path) if task.mmproj_path else None,
-                        env=task.env,
-                        config=task.config,
-                        last_heartbeat=created_time,
-                        last_error=None,
-                        created_at=created_time,
-                        started_at=created_time,
-                    )
-                    col_instances = self.db["instances"]
-                    col_instances.insert_one(instance.model_dump())
-                    logger.info(f"Node {self.node.node_id} created instance record for task: {task.task_id}")
-            else:
-                time.sleep(5)
+    def deploy_instance(self, task: InstanceTask):
+        log_file = f"/tmp/{task.instance_name}.log"
+        cmd_list = [
+            str(self.node.llama_path),
+            "--model",
+            str(self.nfs_path / task.model_path),
+            "--host",
+            self.node.ip_address,
+            "--port",
+            str(task.port),
+        ]
+        if task.mmproj_path:
+            cmd_list += ["--mmproj", str(self.nfs_path / task.mmproj_path)]
+        for k, v in task.config.items():
+            cmd_list += [k, str(v)]
+        process = subprocess.Popen(
+            cmd_list, env=task.env, stdout=open(log_file, "w"), stderr=subprocess.STDOUT, start_new_session=True
+        )
+        col = self.db["instances"]
+        created_time = time.time()
+        instance = Instance(
+            instance_name=task.instance_name,
+            node_id=task.node_id,
+            status="RUNNING",
+            pid=process.pid,
+            host=self.node.ip_address,
+            port=task.port,
+            model_path=str(task.model_path),
+            local_model_path=str(self.nfs_path / task.model_path),
+            mmproj_path=str(task.mmproj_path) if task.mmproj_path else None,
+            local_mmproj_path=str(self.nfs_path / task.mmproj_path) if task.mmproj_path else None,
+            env=task.env,
+            config=task.config,
+            last_heartbeat=created_time,
+            last_error=None,
+            created_at=created_time,
+            started_at=created_time,
+        )
+        col.insert_one(instance.model_dump())
+        logger.info(f"Node {self.node.node_id} deployed instance for task: {task.task_id}")
 
     def stop_instance(self, instance: Instance):
         try:
@@ -240,31 +154,45 @@ class NodeAgent:
         col = self.db["instances"]
         col.update_one(
             {"node_id": instance.node_id, "instance_name": instance.instance_name},
-            {"$set": {"status": "STOPPED", "last_error": None}}
+            {
+                "$set": {
+                    "status": "STOPPED",
+                    "last_error": None,
+                    "last_stopped_at": time.time(),
+                }
+            },
         )
 
     def resume_instance(self, instance: Instance):
         log_file = f"/tmp/{instance.instance_name}.log"
         cmd_list = [
             str(self.node.llama_path),
-            "--model", str(self.nfs_path / instance.model_path),
-            "--host", self.node.ip_address,
-            "--port", str(instance.port),
+            "--model",
+            str(self.nfs_path / instance.model_path),
+            "--host",
+            self.node.ip_address,
+            "--port",
+            str(instance.port),
         ]
         if instance.mmproj_path:
             cmd_list += ["--mmproj", str(self.nfs_path / instance.mmproj_path)]
         for k, v in instance.config.items():
             cmd_list += [k, str(v)]
-        process = subprocess.Popen(cmd_list, 
-                                 env=instance.env, 
-                                 stdout=open(log_file, "w"),
-                                 stderr=subprocess.STDOUT,
-                                 start_new_session=True)
+        process = subprocess.Popen(
+            cmd_list, env=instance.env, stdout=open(log_file, "w"), stderr=subprocess.STDOUT, start_new_session=True
+        )
         new_pid = process.pid
         col = self.db["instances"]
         col.update_one(
             {"node_id": instance.node_id, "instance_name": instance.instance_name},
-            {"$set": {"status": "RUNNING", "pid": new_pid, "last_error": None}}
+            {
+                "$set": {
+                    "status": "RUNNING",
+                    "pid": new_pid,
+                    "last_error": None,
+                    "started_at": time.time(),
+                }
+            },
         )
 
     def handle_manage_instance_task(self):
@@ -275,7 +203,7 @@ class NodeAgent:
                 sort=[("created_at", pymongo.ASCENDING)],
             )
             if task_doc:
-                task = ManageInstanceTask.model_validate(task_doc)
+                task = InstanceTask.model_validate(task_doc)
                 err_msg = None
                 result = None
                 try:
@@ -283,22 +211,20 @@ class NodeAgent:
                     col.update_one(
                         {"task_id": task.task_id}, {"$set": {"status": "PROCESSING", "started_at": time.time()}}
                     )
-                    instance_doc = self.db["instances"].find_one({"node_id": task.node_id, "instance_name": task.instance_name})
+                    instance_doc = self.db["instances"].find_one(
+                        {"node_id": task.node_id, "instance_name": task.instance_name}
+                    )
                     if not instance_doc:
                         raise RuntimeError(f"Instance {task.instance_name} not found on node {task.node_id}")
                     instance = Instance.model_validate(instance_doc)
                     # 根据任务类型执行相应操作
                     match task.type:
+                        case "DEPLOY":
+                            self.deploy_instance(task)
                         case "STOP":
                             self.stop_instance(instance)
                         case "RESUME":
                             # 恢复实例：重新启动一个新的进程，更新实例状态为RUNNING
-                            self.resume_instance(instance)
-                        case "MODIFY":
-                            # 修改实例配置：先停止实例，修改配置后再恢复实例
-                            self.stop_instance(instance)
-                            instance.env.update(task.env_override or {})
-                            instance.config.update(task.config_override or {})
                             self.resume_instance(instance)
                         case _:
                             raise RuntimeError(f"Unknown manage instance task type: {task.type}")
@@ -314,20 +240,18 @@ class NodeAgent:
                         {"$set": {"status": result, "finished_at": time.time(), "error_msg": err_msg}},
                     )
             else:
-                time.sleep(5)
-                
+                time.sleep(1)
+
     def run(self):
         self.register_self()
 
         # 创建线程
         th_self_maintenance = threading.Thread(target=self.self_maintenance, daemon=True)
-        th_handle_create_instance_task = threading.Thread(target=self.handle_create_instance_task, daemon=True)
         th_instance_maintenance = threading.Thread(target=self.instance_maintenance, daemon=True)
         th_handle_manage_instance_task = threading.Thread(target=self.handle_manage_instance_task, daemon=True)
 
         # 启动线程
         th_self_maintenance.start()
-        th_handle_create_instance_task.start()
         th_instance_maintenance.start()
         th_handle_manage_instance_task.start()
 

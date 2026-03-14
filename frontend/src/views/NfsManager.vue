@@ -1,7 +1,7 @@
 <template>
   <div>
     <h2>NFS管理</h2>
-    <div style="margin-bottom:16px;">
+    <div style="margin-bottom: 16px">
       <label>
         <input type="checkbox" v-model="onlyModels" />
         只看模型
@@ -12,8 +12,12 @@
       <div class="model-list">
         <div v-for="model in models" :key="model.model_name" class="model-card">
           <div class="model-title">{{ model.model_name }}</div>
-          <div v-if="model.model_file" class="model-file">模型文件: <span class="file-path">{{ model.model_file }}</span></div>
-          <div v-if="model.mmproj_file" class="model-file">mmproj文件: <span class="file-path">{{ model.mmproj_file }}</span></div>
+          <div v-if="model.model_file" class="model-file">
+            模型文件: <span class="file-path">{{ model.model_file }}</span>
+          </div>
+          <div v-if="model.mmproj_file" class="model-file">
+            mmproj文件: <span class="file-path">{{ model.mmproj_file }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -21,11 +25,16 @@
       <h3>文件浏览器</h3>
       <div>
         <button v-if="pathStack.length" @click="goBack">返回上一级</button>
-        <span style="margin-left:8px;">当前路径: {{ currentPath }}</span>
+        <span style="margin-left: 8px">当前路径: {{ currentPath }}</span>
       </div>
       <ul>
         <li v-for="item in items" :key="item.nfs_path">
-          <span v-if="item.type === 'directory'" style="color:#1979C6; cursor:pointer;" @click="enterDir(item)">📁 {{ item.name }}</span>
+          <span
+            v-if="item.type === 'directory'"
+            style="color: #1979c6; cursor: pointer"
+            @click="enterDir(item)"
+            >📁 {{ item.name }}</span
+          >
           <span v-else>📄 {{ item.name }}</span>
         </li>
       </ul>
@@ -85,7 +94,7 @@ async function goBack() {
 <style scoped>
 /* 页面美化 */
 h2 {
-  color: #1979C6;
+  color: #1979c6;
   margin-bottom: 24px;
 }
 .model-list {
@@ -97,7 +106,7 @@ h2 {
 .model-card {
   background: linear-gradient(135deg, #f8fafc 60%, #e6f7ff 100%);
   border-radius: 14px;
-  box-shadow: 0 2px 12px rgba(25,121,198,0.10);
+  box-shadow: 0 2px 12px rgba(25, 121, 198, 0.1);
   padding: 24px 18px;
   min-width: 320px;
   max-width: 520px;
@@ -109,7 +118,7 @@ h2 {
 .model-title {
   font-size: 20px;
   font-weight: 700;
-  color: #1979C6;
+  color: #1979c6;
   margin-bottom: 12px;
 }
 .model-file {
@@ -123,7 +132,7 @@ h2 {
   word-break: break-all;
 }
 button {
-  background: #1979C6;
+  background: #1979c6;
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -133,6 +142,6 @@ button {
   font-weight: 600;
 }
 button:hover {
-  background: #52C41A;
+  background: #52c41a;
 }
 </style>

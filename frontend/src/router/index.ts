@@ -2,7 +2,7 @@ import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router';
 import Nodes from '../views/Nodes.vue';
 
 import Metrics from '../views/Metrics.vue';
-import CreateInstanceTask from '../views/CreateInstanceTask.vue';
+import CreateInstanceTask from '../views/CreateInstanceForm.vue';
 
 import Instances from '../views/Instances.vue';
 import NfsManager from '../views/NfsManager.vue';
