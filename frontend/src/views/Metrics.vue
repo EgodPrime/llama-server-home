@@ -35,6 +35,9 @@ const route = useRoute();
 const nodeId = route.params.node_id as string;
 const metrics = ref([]);
 const gpuData = ref([]);
+var cpuChart: Line | null = null;
+var ramLine: Line | null = null;
+var gpuLines: { [gpuId: number]: Line } = {};
 // 计算GPU每两个一组
 import { computed } from 'vue';
 const gpuPairs = computed(() => {
@@ -45,20 +48,19 @@ const gpuPairs = computed(() => {
   return arr;
 });
 
+let timer: ReturnType<typeof setInterval> | null = null;
 
-onMounted(async () => {
+const fetchAndRender = async () => {
   metrics.value = await getNodeMetrics(nodeId);
-gpuData.value = metrics.value[0].gpus;
-
-  
+  gpuData.value = metrics.value[0]?.gpus || [];
   await nextTick();
   renderCharts();
-});
+};
 
-// watch(metrics, async () => {
-//   await nextTick();
-//   renderCharts();
-// });
+onMounted(() => {
+  fetchAndRender();
+  timer = setInterval(fetchAndRender, 5000);
+});
 
 function renderCharts() {
   if (!metrics.value.length) return;
@@ -76,7 +78,7 @@ function renderCharts() {
       : `${Math.round(latest - item.timestamp)}秒前`,
     CPU: item.cpu.usage_percent,
   }));
-    const cpuLine = new Line('cpu-chart', {
+    const new_config = {
       data: cpuData,
       xField: 'x',
       yField: 'CPU',
@@ -94,8 +96,13 @@ function renderCharts() {
       yAxis: {
         min: 0,
       },
-    });
-    cpuLine.render();
+    };
+    if (cpuChart) {
+      cpuChart.update(new_config);
+    } else {
+      cpuChart = new Line('cpu-chart', new_config);
+      cpuChart.render();
+    }
   }
 
   // RAM chart

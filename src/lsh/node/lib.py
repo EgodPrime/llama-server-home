@@ -101,7 +101,8 @@ class NodeAgent:
         col = self.db["metrics"]
         # 如果当前记录数超过20条，则删除最旧的一条
         if col.count_documents({"node_id": self.node.node_id}) >= 20:
-            col.delete_one({"node_id": self.node.node_id}, sort=[("timestamp", pymongo.ASCENDING)])
+            oldest_one = col.find_one({"node_id": self.node.node_id}, sort=[("timestamp", pymongo.ASCENDING)])
+            col.delete_one({"_id": oldest_one["_id"]})
         col.insert_one(metric.model_dump())
         logger.trace(f"Node {self.node.node_id} updated metrics")
 
