@@ -14,13 +14,10 @@ export interface CreateInstanceTask {
 	task_id?: string;
 	type: string; // "DEPLOY" | "CANCEL"
 	instance_name: string;
-	instance_labels?: string[];
 	node_id: string;
 	port: number;
 	model_path: string;
-	model_hash?: string;
 	mmproj_path?: string;
-	mmproj_hash?: string;
 	status?: string;
 	created_at?: string;
 	started_at?: string;
@@ -33,7 +30,6 @@ export interface CreateInstanceTask {
 // Instance
 export interface Instance {
 	instance_name: string;
-	instance_labels?: string[];
 	node_id: string;
 	status?: string; // "RUNNING" | "STOPPED" | "ERROR" | "RESTARTING"
 	pid?: number;

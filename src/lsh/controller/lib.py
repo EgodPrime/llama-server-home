@@ -15,6 +15,7 @@ class Controller:
         self.mongo_client = pymongo.MongoClient(cfg["mongodb_url"])
         self.db = self.mongo_client[cfg["mongodb_name"]]
         self.node_dead_threshold = int(cfg.get("node_dead_threshold", 60))
+        self.nfs_path = cfg.get("nfs_path")
 
     # --- 核心功能：节点自动发现与巡检 ---
     async def node_discovery_and_check(self):
@@ -33,5 +34,5 @@ class Controller:
         return nodes
 
     def create_instance_task(self, task: CreateInstanceTask):
-        col = self.db["instance_tasks"]
+        col = self.db["create_instance_tasks"]
         col.insert_one(task.model_dump())

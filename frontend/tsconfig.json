@@ -1,17 +1,16 @@
 {
   "compilerOptions": {
     "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "Node",
+    "module": "Nodenext",
+    "moduleResolution": "Nodenext",
     "strict": true,
     "jsx": "preserve",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
-    "baseUrl": "./",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src"],

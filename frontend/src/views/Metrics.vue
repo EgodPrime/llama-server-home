@@ -29,19 +29,20 @@
 import { ref, onMounted, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { getNodeMetrics } from '../api/index';
+import { GPUInfo, MemoryInfo, CPUInfo, Metric } from '@/types';
 import { Line } from '@antv/g2plot';
 
 const route = useRoute();
 const nodeId = route.params.node_id as string;
-const metrics = ref([]);
-const gpuData = ref([]);
+const metrics = ref<Metric[]>([]);
+const gpuData = ref<GPUInfo[]>([]);
 var cpuChart: Line | null = null;
 var ramLine: Line | null = null;
 var gpuLines: { [gpuId: number]: Line } = {};
 // 计算GPU每两个一组
 import { computed } from 'vue';
 const gpuPairs = computed(() => {
-  const arr = [];
+  const arr:GPUInfo[][] = [];
   for (let i = 0; i < gpuData.value.length; i += 2) {
     arr.push([gpuData.value[i], gpuData.value[i+1]].filter(Boolean));
   }
@@ -62,10 +63,16 @@ onMounted(() => {
   timer = setInterval(fetchAndRender, 5000);
 });
 
+// 离开页面时清除定时器
+import { onUnmounted } from 'vue';
+onUnmounted(() => {
+  if (timer) clearInterval(timer);
+});
+
 function renderCharts() {
   if (!metrics.value.length) return;
   // 按 timestamp 升序排序
-  const sortedMetrics = [...metrics.value].sort((a: any, b: any) => a.timestamp - b.timestamp);
+  const sortedMetrics: Metric[] = [...metrics.value].sort((a: any, b: any) => a.timestamp - b.timestamp);
   // 计算最新时间戳
   const latest = Math.max(...sortedMetrics.map((item: any) => item.timestamp));
   
@@ -114,39 +121,44 @@ function renderCharts() {
     RAM: item.memory.used_mb
   }));
   const MAX_RAM = sortedMetrics[0].memory.total_mb;
-    const ramLine = new Line('ram-chart', {
-      data: ramData,
-      xField: 'x',
-      yField: 'RAM',
-      point: { size: 4, shape: 'circle' },
-      smooth: true,
-      color: '#52C41A',
-      title: { visible: true, text: 'RAM 使用量' },
-      xAxis: {
-        label: {
-          formatter: (v: any) => v,
-        },
-        type: 'cat',
-      },
-      yAxis: {
-        min: 0,
-        max: MAX_RAM,
-        label: {
-          formatter: (v: any) => `${v} MB`,
-        },
-      },
-    });
-    ramLine.render();
+  const new_config= {
+    data: ramData,
+    xField: 'x',
+    yField: 'RAM',
+    point: { size: 4, shape: 'circle' },
+    smooth: true,
+    color: '#52C41A',
+    title: { visible: true, text: 'RAM 使用量' },
+    xAxis: {
+    label: {
+        formatter: (v: any) => v,
+    },
+    type: 'cat',
+    },
+    yAxis: {
+    min: 0,
+    max: MAX_RAM,
+    label: {
+        formatter: (v: any) => `${v} MB`,
+    },
+    },
+  };
+    if(ramLine) {
+        ramLine.update(new_config);
+    } else {
+        ramLine = new Line('ram-chart', new_config);
+        ramLine.render();
+    }
   }
 
   // GPU charts
   if (gpuData.value.length) {
 // 先提取出 timestamp: GPUInfo[] 的格式，方便后续处理
-  const gpuMixedDataSeq: { [x:number]: GPUInfo[]} = sortedMetrics.map((item: any) => ({
+  const gpuMixedDataSeq = sortedMetrics.map((item: any) => ({
     x: item.timestamp === latest
       ? new Date(item.timestamp * 1000).toLocaleString('zh-CN', { hour12: false })
       : `${Math.round(latest - item.timestamp)}秒前`,
-    GPUS: item.gpus || []
+    GPUS: item.gpus
   }));
   // 在转换成 GPU ID: [{x, memory_used_mb}] 的格式，方便后续每个 GPU 单独画图
   const gpuSeqs: { [gpuId: number]: any[] } = {};
@@ -159,6 +171,7 @@ function renderCharts() {
       });
     });
   });
+
   gpuMixedDataSeq[0].GPUS.forEach((gpu: any) => {
     const gpuMaxRAM = gpu.memory_total_mb;
     const chart_id = `gpu-chart-${gpu.id}`;
@@ -185,14 +198,17 @@ function renderCharts() {
         },
       },
     }
-    const gpuLine = new Line(chart_id, gpuConfig);
-    gpuLine.render();
+    if (gpuLines[gpu.id]) {
+      gpuLines[gpu.id].update(gpuConfig);
+    } else {
+      gpuLines[gpu.id] = new Line(chart_id, gpuConfig);
+      gpuLines[gpu.id].render();
     }
     
-  });
-
-    
   }
+  });
+  }
+    
 }
 </script>
 

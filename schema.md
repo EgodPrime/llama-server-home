@@ -36,14 +36,11 @@
   "type": "DEPLOY | CANCEL", // CANCEL 用来取消task_id相同的任务
 
   "instance_name": "string", // 用户自定义实例名称 (如: "Code-8B-Instruct")
-  "instance_labels": ["string"], // 可选，实例标签列表 (如: ["text", "vision"])
   "node_id": "string",          // 目标节点 ID (如: "Server-T4-01@192.168.1.100")
   
   // --- 模型引用 ---
   "model_path": "string",           // NFS相对路径 (如: "qwen35_27b/xxx.gguf")
-  "model_hash": "string",           // MD5
   "mmproj_path": "string",          // 可选，mmproj文件的NFS相对路径 (如: "qwen35_27b/mmproj.gguf")
-  "mmproj_hash": "string",          // 可选，mmproj文件的MD5
 
   // --- 任务状态流转 ---
   // 状态定义：
@@ -51,7 +48,7 @@
   // DOWNLOADING: Agent 正在从 NFS 复制模型到本地缓存
   // READY: 缓存完成，正在启动llama-server
   // FINISHED: 模型已就绪，Agent 已启动服务 (或停止操作完成)
-  // FAILED:   任务执行失败 (网络错误、Hash 校验失败等)
+  // FAILED:   任务执行失败 (网络错误等)
   "status": "string",              
   
   // --- 时间戳 ---
@@ -98,7 +95,6 @@
   
   // --- 核心标识 ---
   "instance_name": "string",      // 用户自定义名称 (如: "Code-8B-Instruct")
-  "instance_labels": ["string"], // 可选，实例标签列表 (如: ["text", "vision"])
   "node_id": "string",            // 所属节点 ID (如: "Server-T4-01@192.168.1.10")
   
   // --- 运行状态 ---
@@ -126,10 +122,10 @@
   // --- 启动配置 (除--model和--mmproj外均直接继承自tasks记录) ---
   "config": {                     // 完整启动参数 JSON
     "--model": "string",            // 模型文件本地路径
-    "--mmproj": "string",            // mmproj 文件本地路径，如果instance_labels包含"vision"则必填
+    "--mmproj": "string",            // mmproj 文件本地路径
     "--n-gpu-layers": 999,
     "--ctx-size": 131072,
-    "--parallel": 16,
+    "--parallel": 4,
     "--batch-size": 8192,
     "--n-predict": 16384,
     "--temp": 0.7,
@@ -140,8 +136,8 @@
     "--frequency-penalty": 0.0,
     "--repeat-penalty": 1.0,
     "--threads": 4,
-    "--flash-attn": "on|off|auto",
-    "--split-mode": "none|layer|row",
+    "--flash-attn": "on",
+    "--split-mode": "layer",
     "--tensor-split": "0.5,0.5"
   },
 

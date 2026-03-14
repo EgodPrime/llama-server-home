@@ -31,20 +31,17 @@ class CreateInstanceTask(BaseModel):
     task_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     type: str  # DEPLOY | CANCEL
     instance_name: str
-    instance_labels: Optional[List[str]] = None
     node_id: str
     port: int
 
     model_path: str
-    model_hash: Optional[str] = None
     mmproj_path: Optional[str] = None
-    mmproj_hash: Optional[str] = None
 
     """
     INIT:     任务已创建，等待 Agent 领取
     PROCESSING: Agent 已领取任务，正在执行部署或取消操作
     FINISHED: 模型已就绪，Agent 已启动服务 (或停止操作完成)
-    FAILED:   任务执行失败 (网络错误、Hash 校验失败等)
+    FAILED:   任务执行失败 (网络错误等)
     """
     status: Optional[str] = None
 
@@ -60,7 +57,6 @@ class CreateInstanceTask(BaseModel):
 
 class Instance(BaseModel):
     instance_name: str
-    instance_labels: Optional[List[str]] = None
     node_id: str
 
     status: Optional[str] = None  # RUNNING|STOPPED|ERROR|RESTARTING
