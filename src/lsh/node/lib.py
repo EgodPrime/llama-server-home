@@ -1,3 +1,4 @@
+import os
 import pathlib
 import subprocess
 import threading
@@ -140,7 +141,7 @@ class NodeAgent:
                     finally:
                         col.update_one(
                             {"_id": inst_doc["_id"]},
-                            {"$set": {"status": "FAILED" if err_msg else "RUNNING", "last_heartbeat": time.time(), "last_error": err_msg}},
+                            {"$set": {"status": "ERROR" if err_msg else "RUNNING", "last_heartbeat": time.time(), "last_error": err_msg}},
                         )
             elapsed = time.time() - t0
             time.sleep(max(0, self.heartbeat_interval - elapsed))
@@ -170,8 +171,12 @@ class NodeAgent:
                     for k, v in task.config.items():
                         cmd += f" {k} {v}"
                     log_file = f"/tmp/{task.instance_name}.log"
-                    cmd += f" > {log_file} 2>&1 &"
-                    subprocess.run(cmd, shell=True, timeout=60, env=task.env)
+                    subprocess.Popen(cmd, 
+                                     env=task.env, 
+                                     stdout=open(log_file, "w"),
+                                     stderr=subprocess.STDOUT,
+                                     start_new_session=True, 
+                                     preexec_fn=os.setsid)
                     find_pid_cmd = f"pgrep -f '{cmd}'"
                     pid_result = subprocess.run(find_pid_cmd, shell=True, capture_output=True, text=True)
                     if pid_result.returncode == 0:
