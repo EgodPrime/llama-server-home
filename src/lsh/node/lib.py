@@ -169,8 +169,8 @@ class NodeAgent:
                     instance = Instance(
                         instance_name=task.instance_name,
                         node_id=task.node_id,
-                        status="RUNNING" if task.status == "FINISHED" else "ERROR",
-                        pid=pid if task.status == "FINISHED" else None,
+                        status="RUNNING",
+                        pid=pid,
                         host=self.node.ip_address,
                         port=task.port,
                         model_path=str(task.model_path),
@@ -180,7 +180,7 @@ class NodeAgent:
                         env=task.env,
                         config=task.config,
                         last_heartbeat=created_time,
-                        last_error=err_msg if task.status == "FAILED" else None,
+                        last_error=None,
                         created_at=created_time,
                         started_at=created_time,
                     )
