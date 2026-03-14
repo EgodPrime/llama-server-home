@@ -195,8 +195,8 @@ class NodeAgent:
             },
         )
 
-    def handle_manage_instance_task(self):
-        col = self.db["manage_instance_tasks"]
+    def handle_instance_task(self):
+        col = self.db["instance_tasks"]
         while True:
             task_doc = col.find_one(
                 {"node_id": self.node.node_id, "status": "INIT"},
@@ -248,11 +248,11 @@ class NodeAgent:
         # 创建线程
         th_self_maintenance = threading.Thread(target=self.self_maintenance, daemon=True)
         th_instance_maintenance = threading.Thread(target=self.instance_maintenance, daemon=True)
-        th_handle_manage_instance_task = threading.Thread(target=self.handle_manage_instance_task, daemon=True)
+        th_handle_instance_task = threading.Thread(target=self.handle_instance_task, daemon=True)
 
         # 启动线程
         th_self_maintenance.start()
         th_instance_maintenance.start()
-        th_handle_manage_instance_task.start()
+        th_handle_instance_task.start()
 
         th_self_maintenance.join()
