@@ -184,8 +184,7 @@ class NodeAgent:
                                      env=task.env, 
                                      stdout=open(log_file, "w"),
                                      stderr=subprocess.STDOUT,
-                                     start_new_session=True, 
-                                     preexec_fn=os.setsid)
+                                     start_new_session=True)
                  
                
                     pid = process.pid
