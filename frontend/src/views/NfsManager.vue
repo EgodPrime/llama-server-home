@@ -35,7 +35,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue';
-import { listNfsRoot, listNfsDir, listNfsModels } from '../api/index';
+import { listNfsRoot, listNfsDir, listNfsModels } from '@/api/index.js';
 
 const onlyModels = ref(true);
 const models = ref<any[]>([]);

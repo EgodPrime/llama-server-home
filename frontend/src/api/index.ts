@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Node, Metric, CreateInstanceTask } from '../types/index.ts';
+import { Node, Metric, CreateInstanceTask } from '../types/index.js';
 
 // 获取节点列表
 export async function listNodes(): Promise<Node[]> {
@@ -16,6 +16,18 @@ export async function getNodeMetrics(nodeId: string, n = 20): Promise<Metric[]> 
 // 创建实例任务
 export async function createInstanceTask(task: CreateInstanceTask): Promise<{ message: string; task_id: string }> {
 	const res = await axios.post('/api/tasks/create_instance_task', task);
+	return res.data;
+}
+
+// 获取创建实例任务列表
+export async function listCreateInstanceTasks(): Promise<CreateInstanceTask[]> {
+  const res = await axios.get('/api/tasks/list_create_instance_tasks');
+  return res.data;
+}
+
+// 删除创建实例任务
+export async function deleteCreateInstanceTask(taskId: string): Promise<{ message: string; task_id: string }> {
+	const res = await axios.delete(`/api/tasks/delete_create_instance_task/${taskId}`);
 	return res.data;
 }
 

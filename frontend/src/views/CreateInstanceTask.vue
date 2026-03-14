@@ -99,8 +99,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue';
-import { listNodes, createInstanceTask, listNfsModels } from '../api/index';
-import type { CreateInstanceTask, Node } from '../types/index';
+import { listNodes, createInstanceTask, listNfsModels } from '@/api/index.js';
+import type { CreateInstanceTask, Node } from '@/types/index.js';
 
 const nodes = ref<Node[]>([]);
 const models = ref<any[]>([]);

@@ -9,7 +9,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { Instance } from '../types/index';
+import { Instance } from '@/types/index.js';
 import axios from 'axios';
 
 const instances = ref<Instance[]>([]);

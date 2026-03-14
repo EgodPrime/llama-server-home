@@ -2,6 +2,7 @@ import fastapi
 import os
 from lsh.controller.lib import Controller, CreateInstanceTask
 from lsh.repo.metrics import get_metrics_last_n
+from lsh.utils.schema import Instance
 
 app = fastapi.FastAPI()
 controller = Controller()
@@ -72,26 +73,30 @@ async def list_nfs_models():
     return models
 
 
-
-@app.post("/tasks/cancel_create_instance_task")
-async def cancel_instance(task: CreateInstanceTask):
-    task.type = "CANCEL"
-    controller.create_instance_task(task)
-    return {"message": "Instance cancellation task created", "task_id": task.task_id}
-
-
 @app.get("/tasks/list_create_instance_tasks")
 async def list_create_instance_tasks():
-    col = controller.db["instance_tasks"]
+    col = controller.db["create_instance_tasks"]
     tasks = col.find().sort("created_at", -1)
     return [CreateInstanceTask.model_validate(task).model_dump() for task in tasks]
+
+
+# 删除创建实例任务
+@app.delete("/tasks/delete_create_instance_task/{task_id}")
+async def delete_create_instance_task(task_id: str):
+    col = controller.db["create_instance_tasks"]
+    result = col.delete_one({"task_id": task_id})
+    if result.deleted_count == 1:
+        return {"message": "Task deleted", "task_id": task_id}
+    else:
+        return fastapi.HTTPException(status_code=404, detail="Task not found")
 
 
 @app.get("/instances/list_instances")
 async def list_instances():
     col = controller.db["instances"]
     instances = col.find().sort("created_at", -1)
-    return [instance for instance in instances]
+    # 转换为dict并去掉MongoDB自动生成的_id字段
+    return [Instance.model_validate(instance).model_dump() for instance in instances]
 
 if __name__ == "__main__":
     import uvicorn

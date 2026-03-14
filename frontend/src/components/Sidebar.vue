@@ -3,6 +3,7 @@
     <router-link to="/" class="nav-item" :class="{active: $route.path === '/'}">节点管理</router-link>
     <router-link to="/instances" class="nav-item" :class="{active: $route.path.startsWith('/instances')}">实例管理</router-link>
     <router-link to="/nfs" class="nav-item" :class="{active: $route.path.startsWith('/nfs')}">NFS管理</router-link>
+    <router-link to="/tasks" class="nav-item" :class="{active: $route.path.startsWith('/tasks')}">任务管理</router-link>
   </div>
 </template>
 

@@ -13,6 +13,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/instances', name: 'Instances', component: Instances },
   { path: '/instance-task', name: 'CreateInstanceTask', component: CreateInstanceTask },
   { path: '/nfs', name: 'NfsManager', component: NfsManager },
+  { path: '/tasks', name: 'TaskManager', component: () => import('../views/TaskManager.vue') },
 ];
 
 const router = createRouter({

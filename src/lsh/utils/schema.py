@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+import time
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, computed_field
@@ -45,9 +45,9 @@ class CreateInstanceTask(BaseModel):
     """
     status: Optional[str] = None
 
-    created_at: Optional[datetime] = None
-    started_at: Optional[datetime] = None
-    finished_at: Optional[datetime] = None
+    created_at: Optional[float] = Field(default_factory=time.time)
+    started_at: Optional[float] = None
+    finished_at: Optional[float] = None
 
     error_msg: Optional[str] = None
 
@@ -74,12 +74,12 @@ class Instance(BaseModel):
     env: Optional[Dict[str, str]] = None
     config: Optional[Dict[str, Any]] = None
 
-    last_heartbeat: Optional[datetime] = None
+    last_heartbeat: Optional[float] = None
     last_error: Optional[str] = None
 
-    created_at: Optional[datetime] = None
-    started_at: Optional[datetime] = None
-    last_stopped_at: Optional[datetime] = None
+    created_at: Optional[float] = Field(default_factory=time.time)
+    started_at: Optional[float] = None
+    last_stopped_at: Optional[float] = None
 
 
 class ManageInstanceTask(BaseModel):
@@ -94,17 +94,17 @@ class ManageInstanceTask(BaseModel):
     env_override: Optional[Dict[str, str]] = None
     config_override: Optional[Dict[str, Any]] = None
 
-    created_at: Optional[datetime] = None
-    started_at: Optional[datetime] = None
-    finished_at: Optional[datetime] = None
+    created_at: Optional[float] = Field(default_factory=time.time)
+    started_at: Optional[float] = None
+    finished_at: Optional[float] = None
 
 
 class Log(BaseModel):
     node_id: str
     instance_name: str
     content: Optional[str] = None  # latest ~50 lines joined by \n
-    created_at: Optional[datetime] = None
-    last_updated_at: Optional[datetime] = None
+    created_at: Optional[float] = Field(default_factory=time.time)
+    last_updated_at: Optional[float] = None
 
 
 class CPUInfo(BaseModel):

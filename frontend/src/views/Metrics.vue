@@ -28,8 +28,8 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
-import { getNodeMetrics } from '../api/index';
-import { GPUInfo, MemoryInfo, CPUInfo, Metric } from '@/types';
+import { getNodeMetrics } from '@/api/index.js';
+import { GPUInfo, MemoryInfo, CPUInfo, Metric } from '@/types/index.js';
 import { Line } from '@antv/g2plot';
 
 const route = useRoute();

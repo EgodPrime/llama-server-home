@@ -14,8 +14,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { listNodes } from '../api/index';
-import { Node } from '../types/index';
+import { listNodes } from '@/api/index.js';
+import { Node } from '@/types/index.js';
 import { useRouter } from 'vue-router';
 
 const nodes = ref<Node[]>([]);

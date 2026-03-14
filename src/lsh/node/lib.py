@@ -106,13 +106,45 @@ class NodeAgent:
         col.insert_one(metric.model_dump())
         logger.trace(f"Node {self.node.node_id} updated metrics")
 
-    def sel_maintenance(self):
+    def self_maintenance(self):
         while True:
             t0 = time.time()
             self.heartbeat()
             self.updaate_metric()
             elapsed = time.time() - t0
             time.sleep(max(0, self.heartbeat_interval - elapsed))
+
+    def instance_maintenance(self):
+        """
+        检查数据库中所有node_id为自己的实例，验证它们的状态是否正常（对应的进程还在吗？端口还在监听吗？），如果发现异常则更新状态为FAILED，并记录错误信息
+        """
+        col = self.db["instances"]
+        while True:
+            t0 = time.time()
+            instances = col.find({"node_id": self.node.node_id})
+            for inst_doc in instances:
+                instance = Instance.model_validate(inst_doc)
+                err_msg = None
+                if instance.status == "RUNNING":
+                    try:
+                        proc = psutil.Process(instance.pid)
+                        if proc.is_running():
+                            # 还可以进一步检查端口是否在监听
+                            if not proc.net_connections():
+                                raise RuntimeError("Process is running but not listening on any port")
+                        else:
+                            raise RuntimeError("Process is not running")
+                    except Exception as e:
+                        err_msg = str(e)
+                        logger.warning(f"Instance {instance.instance_name} on node {self.node.node_id} failed: {e}")
+                    finally:
+                        col.update_one(
+                            {"_id": inst_doc["_id"]},
+                            {"$set": {"status": "FAILED" if err_msg else "RUNNING", "last_heartbeat": time.time(), "last_error": err_msg}},
+                        )
+            elapsed = time.time() - t0
+            time.sleep(max(0, self.heartbeat_interval - elapsed))
+            
 
     def handle_create_instance_task(self):
         col = self.db["create_instance_tasks"]
@@ -194,11 +226,13 @@ class NodeAgent:
         self.register_self()
 
         # 创建线程
-        th_maintenance = threading.Thread(target=self.sel_maintenance, daemon=True)
+        th_self_maintenance = threading.Thread(target=self.self_maintenance, daemon=True)
         th_handle_create_instance_task = threading.Thread(target=self.handle_create_instance_task, daemon=True)
+        th_instance_maintenance = threading.Thread(target=self.instance_maintenance, daemon=True)
 
         # 启动线程
-        th_maintenance.start()
+        th_self_maintenance.start()
         th_handle_create_instance_task.start()
+        th_instance_maintenance.start()
 
-        th_maintenance.join()
+        th_self_maintenance.join()

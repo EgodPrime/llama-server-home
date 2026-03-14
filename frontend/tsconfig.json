@@ -1,8 +1,9 @@
 {
   "compilerOptions": {
     "target": "ESNext",
-    "module": "Nodenext",
-    "moduleResolution": "Nodenext",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    
     "strict": true,
     "jsx": "preserve",
     "esModuleInterop": true,
