@@ -1,3 +1,6 @@
+import pathlib
+import subprocess
+import threading
 import time
 from typing import Any, List
 
@@ -5,9 +8,10 @@ import psutil
 import pymongo
 import pynvml
 import yaml
+from loguru import logger
 
 from lsh.utils.path_helper import NODE_CONFIG_PATH
-from lsh.utils.schema import CPUInfo, GPUInfo, MemoryInfo, Metric, Node
+from lsh.utils.schema import CPUInfo, CreateInstanceTask, GPUInfo, Instance, MemoryInfo, Metric, Node
 
 
 def measure_cpu() -> CPUInfo:
@@ -61,6 +65,7 @@ class NodeAgent:
         self.mongo_client = pymongo.MongoClient(cfg["mongodb_url"])
         self.db = self.mongo_client[cfg["mongodb_name"]]
         self.heartbeat_interval = int(cfg.get("heartbeat_interval", 5))
+        self.nfs_path = pathlib.Path(cfg.get("nfs_path")).resolve()
         self.node = Node(
             name=cfg["name"],
             ip_address=cfg["ip_address"],
@@ -75,12 +80,15 @@ class NodeAgent:
         existing_node = col.find_one({"node_id": self.node.node_id})
         if existing_node:
             col.update_one({"node_id": self.node.node_id}, {"$set": self.node.model_dump()})
+            logger.info(f"Node {self.node.node_id} already exists. Updated info")
         else:
             col.insert_one(self.node.model_dump())
+            logger.info(f"Registered new node: {self.node.node_id}")
 
     def heartbeat(self):
         col = self.db["nodes"]
         col.update_one({"node_id": self.node.node_id}, {"$set": {"last_heartbeat": time.time(), "status": "ONLINE"}})
+        logger.trace(f"Node {self.node.node_id} sent heartbeat.")
 
     def updaate_metric(self):
         metric = Metric(
@@ -91,13 +99,104 @@ class NodeAgent:
             gpus=measure_gpu(),
         )
         col = self.db["metrics"]
+        # 如果当前记录数超过20条，则删除最旧的一条
+        if col.count_documents({"node_id": self.node.node_id}) >= 20:
+            col.delete_one({"node_id": self.node.node_id}, sort=[("timestamp", pymongo.ASCENDING)])
         col.insert_one(metric.model_dump())
+        logger.trace(f"Node {self.node.node_id} updated metrics")
 
-    def run(self):
-        self.register_self()
+    def sel_maintenance(self):
         while True:
             t0 = time.time()
             self.heartbeat()
             self.updaate_metric()
             elapsed = time.time() - t0
             time.sleep(max(0, self.heartbeat_interval - elapsed))
+
+    def handle_create_instance_task(self):
+        col = self.db["create_instance_tasks"]
+        while True:
+            task_doc = col.find_one(
+                {"node_id": self.node.node_id, "status": "INIT"},
+                sort=[("created_at", pymongo.ASCENDING)],
+            )
+            if task_doc:
+                task = CreateInstanceTask.model_validate(task_doc)
+                err_msg = None
+                result = None
+                pid = None
+                try:
+                    logger.info(f"Node {self.node.node_id} handling task: {task.task_id}")
+                    col.update_one(
+                        {"task_id": task.task_id}, {"$set": {"status": "PROCESSING", "started_at": time.time()}}
+                    )
+                    cmd = f"{self.node.llama_path} --model {self.nfs_path / task.model_path}"
+                    if task.mmproj_path:
+                        cmd += f" --mmproj {self.nfs_path / task.mmproj_path}"
+                    cmd += f" --host {self.node.ip_address} --port {task.port}"
+                    for k, v in task.config.items():
+                        cmd += f" --{k} {v}"
+                    log_file = f"/tmp/{task.instance_name}.log"
+                    cmd += f" > {log_file} 2>&1 &"
+                    subprocess.run(cmd, shell=True, timeout=60)
+                    find_pid_cmd = f"pgrep -f '{cmd}'"
+                    pid_result = subprocess.run(find_pid_cmd, shell=True, capture_output=True, text=True)
+                    if pid_result.returncode == 0:
+                        pid = int(pid_result.stdout.strip())
+                    else:
+                        raise RuntimeError(f"Failed to find PID for command: {cmd}")
+                    logger.info(f"Node {self.node.node_id} successfully handled task: {task.task_id}")
+                    result = "FINISHED"
+                except Exception as e:
+                    err_msg = str(e)
+                    logger.warning(f"Node {self.node.node_id} failed to handle task: {task.task_id}")
+                    result = "FAILED"
+                    if pid:
+                        try:
+                            psutil.Process(pid).kill()
+                        except Exception:
+                            pass
+                finally:
+                    col.update_one(
+                        {"task_id": task.task_id},
+                        {"$set": {"status": result, "finished_at": time.time(), "error_msg": err_msg}},
+                    )
+
+                if result == "FINISHED":
+                    # --- 任务完成后，创建一个新的实例记录 ---
+                    created_time = time.time() if task.status == "FINISHED" else None
+                    instance = Instance(
+                        instance_name=task.instance_name,
+                        instance_labels=task.instance_labels,
+                        node_id=task.node_id,
+                        status="RUNNING" if task.status == "FINISHED" else "ERROR",
+                        pid=pid if task.status == "FINISHED" else None,
+                        host=self.node.ip_address,
+                        port=task.port,
+                        model_path=self.nfs_path,
+                        local_model_path=self.nfs_path / task.model_path,
+                        mmproj_path=self.nfs_path / task.mmproj_path if task.mmproj_path else None,
+                        local_mmproj_path=self.nfs_path / task.mmproj_path if task.mmproj_path else None,
+                        env=task.env,
+                        config=task.config,
+                        last_heartbeat=created_time,
+                        last_error=err_msg if task.status == "FAILED" else None,
+                        created_at=created_time,
+                        started_at=created_time,
+                    )
+                    col_instances = self.db["instances"]
+                    col_instances.insert_one(instance.model_dump())
+                    logger.info(f"Node {self.node.node_id} created instance record for task: {task.task_id}")
+            else:
+                time.sleep(5)
+
+    def run(self):
+        self.register_self()
+
+        # 创建线程
+        th_maintenance = threading.Thread(target=self.sel_maintenance, daemon=True)
+        th_handle_create_instance_task = threading.Thread(target=self.handle_create_instance_task, daemon=True)
+
+        # 启动线程，因为都是守护线程，所以主线程不需要等待它们join
+        th_maintenance.start()
+        th_handle_create_instance_task.start()

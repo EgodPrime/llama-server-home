@@ -13,3 +13,4 @@ wheels/
 # config files
 controller.yaml
 node.yaml
+frontend/node_modules/

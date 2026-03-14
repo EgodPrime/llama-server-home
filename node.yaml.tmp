@@ -4,3 +4,4 @@ heartbeat_interval: 5 # seconds
 name: "local_node"
 ip_address: "localhost"
 llama_path: "path/to/llama-server"
+nfs_path: "path/to/nfs"

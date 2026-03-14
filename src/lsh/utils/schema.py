@@ -33,12 +33,19 @@ class CreateInstanceTask(BaseModel):
     instance_name: str
     instance_labels: Optional[List[str]] = None
     node_id: str
+    port: int
 
     model_path: str
     model_hash: Optional[str] = None
     mmproj_path: Optional[str] = None
     mmproj_hash: Optional[str] = None
 
+    """
+    INIT:     任务已创建，等待 Agent 领取
+    PROCESSING: Agent 已领取任务，正在执行部署或取消操作
+    FINISHED: 模型已就绪，Agent 已启动服务 (或停止操作完成)
+    FAILED:   任务执行失败 (网络错误、Hash 校验失败等)
+    """
     status: Optional[str] = None
 
     created_at: Optional[datetime] = None
@@ -59,11 +66,13 @@ class Instance(BaseModel):
     status: Optional[str] = None  # RUNNING|STOPPED|ERROR|RESTARTING
 
     pid: Optional[int] = None
-    port: Optional[int] = None
     host: Optional[str] = None
+    port: Optional[int] = None
 
     model_path: str
-    local_path: Optional[str] = None
+    mmproj_path: Optional[str] = None
+    local_model_path: Optional[str] = None
+    local_mmproj_path: Optional[str] = None
     model_size_b: Optional[float] = None
 
     env: Optional[Dict[str, str]] = None
