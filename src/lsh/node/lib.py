@@ -139,7 +139,7 @@ class NodeAgent:
                         cmd += f" {k} {v}"
                     log_file = f"/tmp/{task.instance_name}.log"
                     cmd += f" > {log_file} 2>&1 &"
-                    subprocess.run(cmd, shell=True, timeout=60)
+                    subprocess.run(cmd, shell=True, timeout=60, env=task.env)
                     find_pid_cmd = f"pgrep -f '{cmd}'"
                     pid_result = subprocess.run(find_pid_cmd, shell=True, capture_output=True, text=True)
                     if pid_result.returncode == 0:
