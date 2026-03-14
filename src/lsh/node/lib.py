@@ -126,25 +126,28 @@ class NodeAgent:
             for inst_doc in instances:
                 instance = Instance.model_validate(inst_doc)
                 err_msg = None
-                alive = False
+                works_fine = False
                 try:
                     proc = psutil.Process(instance.pid)
                     if proc.is_running():
                         # 还可以进一步检查端口是否在监听
                         if not proc.net_connections():
                             raise RuntimeError("Process is running but not listening on any port")
-                        alive = True
-                    else:
-                        if instance.status == "RUNNING":
-                            raise RuntimeError("Process is not running")
+                        works_fine = True
                 except Exception as e:
                     err_msg = str(e)
-                    logger.warning(f"Instance {instance.instance_name} on node {self.node.node_id} failed: {e}")
-                finally:
-                    col.update_one(
-                        {"_id": inst_doc["_id"]},
-                        {"$set": {"status": "RUNNING" if alive else "ERROR", "last_heartbeat": time.time(), "last_error": err_msg}},
-                        )
+                cfg = {"last_heartbeat": time.time()}
+                match instance.status:
+                    case "RUNNING":
+                        if not works_fine:
+                            cfg["status"] = "ERROR"
+                            cfg["last_error"] = err_msg
+                    case "RESTARTING", "ERROR", "STOPPED":
+                        if works_fine:
+                            cfg["status"] = "RUNNING"
+                            cfg["last_error"] = None
+                col.update_one({"_id": inst_doc["_id"]}, {"$set": cfg})
+
             elapsed = time.time() - t0
             time.sleep(max(0, self.heartbeat_interval - elapsed))
             
