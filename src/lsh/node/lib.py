@@ -101,6 +101,7 @@ class NodeAgent:
 
     def instance_maintenance(self):
         """
+        实例巡检
         检查数据库中所有node_id为自己的实例，
         验证它们的状态是否正常（对应的进程还在吗？端口还在监听吗？），
         如果发现异常则更新状态为FAILED，并记录错误信息，顺便更新一下实例日志
