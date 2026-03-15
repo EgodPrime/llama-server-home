@@ -1,13 +1,30 @@
 import os
+import threading
+from contextlib import asynccontextmanager
 
 import fastapi
 
 from lsh.controller.lib import Controller
 from lsh.repo.metrics import get_metrics_last_n
-from lsh.utils.schema import Instance, InstanceTask
+from lsh.utils.schema import Instance, InstanceTask, Log
 
-app = fastapi.FastAPI()
 controller = Controller()
+
+
+@asynccontextmanager
+async def lifespan(app: fastapi.FastAPI):
+    print("[APP] 启动生命周期...")
+
+    # 1. 启动后台线程
+    th = threading.Thread(target=controller.node_discovery_and_check_loop, daemon=True)
+    th.start()
+    print(f"[APP] 已启动线程，ID: {th.ident}")
+
+    # 2. 等待服务器完全就绪（可选，如果需要等待某些初始化完成）
+    yield
+
+
+app = fastapi.FastAPI(lifespan=lifespan)
 
 
 # 列出所有节点
@@ -90,6 +107,17 @@ async def resume_instance(node_id: str, instance_name: str):
     return {"message": f"Instance {instance_name}@{node_id} resume task created"}
 
 
+# 获取实例日志
+@app.get("/instances/logs/{node_id}/{instance_name}")
+async def get_instance_logs(node_id: str, instance_name: str):
+    col = controller.db["logs"]
+    log_doc = col.find_one({"node_id": node_id, "instance_name": instance_name})
+    if not log_doc:
+        return {"log": "No logs found for this instance"}
+    log = Log.model_validate(log_doc)
+    return log.model_dump()
+
+
 # --- NFS 文件浏览相关接口 ---
 def list_directory(dir_path: str):
     res = []
@@ -141,9 +169,3 @@ async def list_nfs_models():
                         model_info["model_file"] = f["nfs_path"]
             models.append(model_info)
     return models
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=8000)

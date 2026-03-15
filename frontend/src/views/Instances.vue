@@ -39,9 +39,33 @@
           >
             恢复
           </button>
+          <button
+            style="color: #722ed1; margin-right: 8px"
+            @click="handleViewLog(record.node_id, record.instance_name)"
+          >
+            查看日志
+          </button>
         </template>
       </template>
     </a-table>
+    <a-modal
+      v-model:open="logModalVisible"
+      title="实例日志"
+      width="700px"
+      @cancel="logModalVisible = false"
+      @ok="logModalVisible = false"
+    >
+      <pre
+        style="
+          max-height: 400px;
+          overflow: auto;
+          background: #f6f6f6;
+          padding: 12px;
+          border-radius: 6px;
+        "
+        >{{ logContent }}</pre
+      >
+    </a-modal>
   </div>
 </template>
 
@@ -49,11 +73,30 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { Instance } from '@/types/index.js';
-import { deleteInstance, stopInstance, resumeInstance, listInstances } from '@/api/index.js';
+import {
+  deleteInstance,
+  stopInstance,
+  resumeInstance,
+  listInstances,
+  getInstanceLogs,
+} from '@/api/index.js';
 import { message } from 'ant-design-vue';
 
 const instances = ref<Instance[]>([]);
 const router = useRouter();
+const logModalVisible = ref(false);
+const logContent = ref('');
+
+async function handleViewLog(nodeId: string, instanceName: string) {
+  logContent.value = '加载中...';
+  logModalVisible.value = true;
+  try {
+    const res = await getInstanceLogs(nodeId, instanceName);
+    logContent.value = res.content || '日志内容为空';
+  } catch (e) {
+    logContent.value = '日志获取失败';
+  }
+}
 
 function goToCreateTask() {
   router.push({ name: 'CreateInstanceTask' });
@@ -110,7 +153,7 @@ onMounted(async () => {
   instances.value = await listInstances();
   timer = setInterval(async () => {
     instances.value = await listInstances();
-  }, 5000);
+  }, 1000);
 });
 
 import { onUnmounted } from 'vue';

@@ -47,13 +47,41 @@ const columns = [
   { title: '名称', dataIndex: 'name', key: 'name' },
   { title: 'IP地址', dataIndex: 'ip_address', key: 'ip_address' },
   { title: '状态', dataIndex: 'status', key: 'status' },
-  { title: '注册时间', dataIndex: 'registered_at', key: 'registered_at' },
-  { title: '最近心跳', dataIndex: 'last_heartbeat', key: 'last_heartbeat' },
+  {
+    title: '注册时间',
+    dataIndex: 'registered_at',
+    key: 'registered_at',
+    customRender: ({ text }: { text: number | undefined }) => {
+      if (typeof text !== 'number' || !text) return '';
+      const date = new Date(text * 1000);
+      return date.toLocaleString('zh-CN', { hour12: false });
+    },
+  },
+  {
+    title: '最近心跳',
+    dataIndex: 'last_heartbeat',
+    key: 'last_heartbeat',
+    customRender: ({ text }: { text: number | undefined }) => {
+      if (typeof text !== 'number' || !text) return '';
+      const date = new Date(text * 1000);
+      return date.toLocaleString('zh-CN', { hour12: false });
+    },
+  },
   { title: '操作', key: 'action' },
 ];
 
+let timer: ReturnType<typeof setInterval> | null = null;
+
 onMounted(async () => {
   nodes.value = await listNodes();
+  timer = setInterval(async () => {
+    nodes.value = await listNodes();
+  }, 1000);
+});
+
+import { onUnmounted } from 'vue';
+onUnmounted(() => {
+  if (timer) clearInterval(timer);
 });
 </script>
 

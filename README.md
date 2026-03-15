@@ -72,6 +72,7 @@ sudo systemctl start mongod
 ### Step 2: 控制器兼后端
 
 ```bash
+mkdir -p <本机想要的挂载点>
 sudo mount -t nfs <NFS服务器IP>:<你实际的NFS共享位置> <本机想要的挂载点>
 git clone https://github.com/EgodPrime/llama-server-home.git
 cd llama-server-home
@@ -86,6 +87,7 @@ uv run uvicorn src.lsh.controller.app:app --host 0.0.0.0 --port 8000
 ### Step 3: 节点
 
 ```bash
+mkdir -p <本机想要的挂载点>
 sudo mount -t nfs <NFS服务器IP>:<你实际的NFS共享位置> <本机想要的挂载点>
 git clone https://github.com/EgodPrime/llama-server-home.git
 cd llama-server-home

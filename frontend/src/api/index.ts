@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Node, Metric, Instance, InstanceTask } from '../types/index.js';
+import { Node, Metric, Instance, InstanceTask, Log } from '../types/index.js';
 
 // 获取节点列表
 export async function listNodes(): Promise<Node[]> {
@@ -61,6 +61,12 @@ export async function resumeInstance(
   instanceName: string
 ): Promise<{ message: string }> {
   const res = await axios.post(`/api/tasks/resume_instance/${nodeId}/${instanceName}`);
+  return res.data;
+}
+
+// 获取实例日志
+export async function getInstanceLogs(nodeId: string, instanceName: string): Promise<Log> {
+  const res = await axios.get(`/api/instances/logs/${nodeId}/${instanceName}`);
   return res.data;
 }
 

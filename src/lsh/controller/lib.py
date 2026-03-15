@@ -18,15 +18,28 @@ class Controller:
         self.nfs_path = cfg.get("nfs_path")
 
     # --- 核心功能：节点自动发现与巡检 ---
-    async def node_discovery_and_check(self):
+    def node_discovery_and_check(self):
         col = self.db["nodes"]
-        nodes = find_nodes_all(col)
-        for node in nodes:
+        nodes = col.find({"status": "ONLINE"})
+        for node_doc in nodes:
+            node = Node.model_validate(node_doc)
             logger.trace(f"Discovering node: {node}")
             now = time.time()
             if (now - node.last_heartbeat) > self.node_dead_threshold:
                 logger.info(f"Node {node.node_id} is considered dead. Last heartbeat was at {node.last_heartbeat}")
                 col.update_one({"node_id": node.node_id}, {"$set": {"status": "OFFLINE"}})
+
+    def node_discovery_and_check_loop(self):
+        while True:
+            t0 = time.time()
+            try:
+                self.node_discovery_and_check()
+            except Exception as e:
+                logger.error(f"Error in node discovery and check: {e}")
+            t1 = time.time()
+            elapsed = t1 - t0
+            sleep_time = max(5, self.node_dead_threshold - elapsed)
+            time.sleep(sleep_time)
 
     def get_all_nodes(self) -> list[Node]:
         col = self.db["nodes"]
