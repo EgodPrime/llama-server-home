@@ -84,6 +84,10 @@ vim controller.yaml
 uv run uvicorn src.lsh.controller.app:app --host 0.0.0.0 --port 8000
 ```
 
+> nfs挂载重启后可能会丢失，可以在/etc/fstab中添加一行来实现开机自动挂载：
+>
+> `<NFS服务器IP>:<NFS服务器挂载点> <本机想要的挂载点> nfs defaults 0 0`
+
 ### Step 3: 节点
 
 ```bash
@@ -98,6 +102,10 @@ cp node.yaml.tmp node.yaml
 vim node.yaml
 uv run run-node
 ```
+
+> nfs挂载重启后可能会丢失，可以在/etc/fstab中添加一行来实现开机自动挂载：
+>
+> `<NFS服务器IP>:<NFS服务器挂载点> <本机想要的挂载点> nfs defaults 0 0`
 
 ### Step 4: 前端
 
