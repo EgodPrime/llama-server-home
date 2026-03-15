@@ -133,6 +133,7 @@ class NodeAgent:
                         if works_fine:
                             cfg["status"] = "RUNNING"
                             cfg["last_error"] = None
+                        logger.warning(f"Instance {instance.instance_name}@{instance.node_id} seems alive but status is {instance.status}. Updated to RUNNING.")
                 col.update_one({"_id": inst_doc["_id"]}, {"$set": cfg})
 
                 if works_fine:
@@ -271,12 +272,12 @@ class NodeAgent:
                             # 恢复实例：重新启动一个新的进程，更新实例状态为RUNNING
                             self.resume_instance(instance)
                         case _:
-                            raise RuntimeError(f"Unknown manage instance task type: {task.type}")
-                    logger.info(f"Node {self.node.node_id} successfully handled manage instance task: {task.task_id}")
+                            raise RuntimeError(f"Unknown instance task type: {task.type}")
+                    logger.info(f"Node {self.node.node_id} successfully handled instance task: {task.task_id}")
                     result = "FINISHED"
                 except Exception as e:
                     err_msg = str(e)
-                    logger.warning(f"Node {self.node.node_id} failed to handle manage instance task: {task.task_id}")
+                    logger.warning(f"Node {self.node.node_id} failed to handle instance task: {task.task_id}")
                     result = "FAILED"
                 finally:
                     col.update_one(
