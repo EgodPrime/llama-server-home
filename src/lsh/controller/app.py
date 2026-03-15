@@ -1,12 +1,17 @@
 import os
 import threading
+import time
 from contextlib import asynccontextmanager
 
+from pydantic import BaseModel
+import bcrypt
 import fastapi
+import jwt
+from fastapi import HTTPException, Request
 
 from lsh.controller.lib import Controller
 from lsh.repo.metrics import get_metrics_last_n
-from lsh.utils.schema import Instance, InstanceTask, Log
+from lsh.utils.schema import Instance, InstanceTask, Log, User
 
 controller = Controller()
 
@@ -169,3 +174,79 @@ async def list_nfs_models():
                         model_info["model_file"] = f["nfs_path"]
             models.append(model_info)
     return models
+
+
+def hash_passwd(password: str) -> bytes:
+    passwdb = password.encode("utf-8")
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(passwdb, salt)
+    return hashed
+
+
+def verify_passwd(password: str, hashed: bytes) -> bool:
+    passwdb = password.encode("utf-8")
+    return bcrypt.checkpw(passwdb, hashed)
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+@app.post("/user/register")
+async def register_user(request: LoginRequest):
+    username = request.username
+    password = request.password
+    col = controller.db["users"]
+    if col.find_one({"username": username}):
+        raise HTTPException(status_code=400, detail="Username already exists")
+    password_hash = hash_passwd(password)  # 注意：实际应用中应使用更安全的哈希算法，如 bcrypt
+    user = User(username=username, password_hash=password_hash)
+    col.insert_one(user.model_dump())
+    return {"message": f"User {username} registered successfully"}
+
+
+
+@app.post("/user/login")
+async def login_user(request: LoginRequest):
+    username = request.username
+    password = request.password
+    hash_passwd(password)
+    col = controller.db["users"]
+    user_doc = col.find_one({"username": username})
+    if not user_doc:
+        raise HTTPException(status_code=400, detail="Invalid username or password")
+    user = User.model_validate(user_doc)
+    if not verify_passwd(password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Invalid username or password")
+    # 更新最后登录时间
+    col.update_one({"username": username}, {"$set": {"last_login_at": time.time()}})
+    # 生成JWT token
+
+    payload = {"username": username, "exp": time.time() + 3600}  # token有效期1小时
+    token = jwt.encode(payload, "kb310", algorithm="HS256")
+    return {"token": token}
+
+
+@app.get("/user/profile")
+async def get_user_profile(request: Request):
+    # 从请求头中获取JWT token
+    token = request.headers.get("Authorization")
+    if not token:
+        raise HTTPException(status_code=400, detail="Authorization token is missing")
+    token = token.replace("Bearer ", "")  # 移除 "Bearer "前缀
+    try:
+        payload = jwt.decode(token, "kb310", algorithms=["HS256"])
+        username = payload.get("username")
+        if not username:
+            raise HTTPException(status_code=400, detail="Invalid token: username missing")
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=400, detail="Invalid token")
+
+    col = controller.db["users"]
+    user_doc = col.find_one({"username": username})
+    if not user_doc:
+        raise HTTPException(status_code=400, detail="User not found")
+
+    user = User.model_validate(user_doc)
+    return user.model_dump()

@@ -123,7 +123,9 @@ class NodeAgent:
                         works_fine = True
                 except Exception as e:
                     err_msg = str(e)
-                    logger.info(f"Instance {instance.instance_name}@{instance.node_id} seems to have an issue: {err_msg}")
+                    logger.info(
+                        f"Instance {instance.instance_name}@{instance.node_id} seems to have an issue: {err_msg}"
+                    )
                 cfg = {"last_heartbeat": time.time()}
                 match instance.status:
                     case "RUNNING":
@@ -134,7 +136,9 @@ class NodeAgent:
                         if works_fine:
                             cfg["status"] = "RUNNING"
                             cfg["last_error"] = None
-                        logger.warning(f"Instance {instance.instance_name}@{instance.node_id} seems alive but status is {instance.status}. Updated to RUNNING.")
+                        logger.warning(
+                            f"Instance {instance.instance_name}@{instance.node_id} seems alive. Updated to RUNNING."
+                        )
                 col.update_one({"_id": inst_doc["_id"]}, {"$set": cfg})
 
                 if works_fine:
@@ -243,7 +247,6 @@ class NodeAgent:
             raise RuntimeError(f"Instance {task.instance_name} not found on node {task.node_id}")
         instance = Instance.model_validate(instance_doc)
         return instance
-
 
     def handle_instance_task(self):
         col = self.db["instance_tasks"]

@@ -1,6 +1,34 @@
 import axios from 'axios';
 import { Node, Metric, Instance, InstanceTask, Log } from '../types/index.js';
 
+// 自动在请求头中添加 Token
+axios.interceptors.request.use(config => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// 统一处理 401 错误，自动跳转到登录页
+axios.interceptors.response.use(
+  response => response, // 成功直接返回
+  error => {
+    if (error.response && error.response.status === 401) {
+      // Token 过期或无效
+      console.warn("认证失败，请重新登录");
+      
+      // 1. 清除本地 Token
+      localStorage.removeItem('token');
+      
+      // 2. 跳转到登录页
+      window.location.href = '/login'; 
+      
+    }
+    return Promise.reject(error);
+  }
+);
+
 // 获取节点列表
 export async function listNodes(): Promise<Node[]> {
   const res = await axios.get('/api/nodes/list_nodes');
@@ -70,7 +98,8 @@ export async function getInstanceLogs(nodeId: string, instanceName: string): Pro
   return res.data;
 }
 
-// NFS API
+/* NFS 相关 API */
+
 export async function listNfsRoot(): Promise<any[]> {
   const res = await axios.get('/api/nfs/list_root');
   return res.data;
@@ -85,3 +114,14 @@ export async function listNfsModels(): Promise<any[]> {
   const res = await axios.get('/api/nfs/list_models');
   return res.data;
 }
+
+/* 用户认证相关 API */
+
+export async function register(username: string, password: string): Promise<{ message: string }> {
+  return axios.post('/api/user/register', { username, password });
+}
+
+export async function login(username: string, password: string): Promise<{ token: string }> {
+  return axios.post('/api/user/login', { username, password });
+}
+
