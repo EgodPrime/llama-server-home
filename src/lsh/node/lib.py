@@ -130,7 +130,7 @@ class NodeAgent:
                         if not works_fine:
                             cfg["status"] = "ERROR"
                             cfg["last_error"] = err_msg
-                    case "ERROR", "STOPPED":
+                    case "ERROR" | "STOPPED":
                         if works_fine:
                             cfg["status"] = "RUNNING"
                             cfg["last_error"] = None
