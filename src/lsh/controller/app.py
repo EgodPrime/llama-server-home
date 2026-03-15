@@ -2,16 +2,17 @@ import os
 import threading
 import time
 from contextlib import asynccontextmanager
+from typing import List
 
 import bcrypt
 import fastapi
 import jwt
-from fastapi import HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from lsh.controller.lib import Controller
 from lsh.repo.metrics import get_metrics_last_n
-from lsh.utils.schema import Instance, InstanceTask, Log, User
+from lsh.utils.schema import Instance, InstanceGroup, InstanceTask, Log, User
 
 controller = Controller()
 
@@ -199,7 +200,7 @@ async def register_user(request: LoginRequest):
     password = request.password
     col = controller.db["users"]
     if col.find_one({"username": username}):
-        raise HTTPException(status_code=400, detail="Username already exists")
+        raise HTTPException(status_code=409, detail="Username already exists")
     password_hash = hash_passwd(password)  # 注意：实际应用中应使用更安全的哈希算法，如 bcrypt
     user = User(username=username, password_hash=password_hash)
     col.insert_one(user.model_dump())
@@ -214,10 +215,10 @@ async def login_user(request: LoginRequest):
     col = controller.db["users"]
     user_doc = col.find_one({"username": username})
     if not user_doc:
-        raise HTTPException(status_code=400, detail="Invalid username or password")
+        raise HTTPException(status_code=401, detail="Invalid username or password")
     user = User.model_validate(user_doc)
     if not verify_passwd(password, user.password_hash):
-        raise HTTPException(status_code=400, detail="Invalid username or password")
+        raise HTTPException(status_code=401, detail="Invalid username or password")
     # 更新最后登录时间
     col.update_one({"username": username}, {"$set": {"last_login_at": time.time()}})
     # 生成JWT token
@@ -232,22 +233,236 @@ async def get_user_profile(request: Request):
     # 从请求头中获取JWT token
     token = request.headers.get("Authorization")
     if not token:
-        raise HTTPException(status_code=400, detail="Authorization token is missing")
+        raise HTTPException(status_code=401, detail="Authorization token is missing")
     token = token.replace("Bearer ", "")  # 移除 "Bearer "前缀
     try:
         payload = jwt.decode(token, "kb310", algorithms=["HS256"])
         username = payload.get("username")
         if not username:
-            raise HTTPException(status_code=400, detail="Invalid token: username missing")
+            raise HTTPException(status_code=401, detail="Invalid token: username missing")
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=400, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="Invalid token")
 
     col = controller.db["users"]
     user_doc = col.find_one({"username": username})
     if not user_doc:
-        raise HTTPException(status_code=400, detail="User not found")
+        raise HTTPException(status_code=404, detail="User not found")
 
     user = User.model_validate(user_doc)
     return user.model_dump()
+
+
+"""
+--- 实例组相关接口 ---
+"""
+
+
+class CreateInstanceGroupRequest(BaseModel):
+    group_name: str
+    instance_names: List[str]
+    instance_node_ids: List[str]
+
+
+async def get_current_user(request: Request) -> User:
+    token = request.headers.get("Authorization")
+    if not token:
+        raise HTTPException(status_code=401, detail="Authorization token is missing")
+    token = token.replace("Bearer ", "")
+    try:
+        payload = jwt.decode(token, "kb310", algorithms=["HS256"])
+        username = payload.get("username")
+        if not username:
+            raise HTTPException(status_code=401, detail="Invalid token: username missing")
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    col = controller.db["users"]
+    user_doc = col.find_one({"username": username})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user = User.model_validate(user_doc)
+    return user
+
+
+# 创建一个实例组
+@app.post("/instance_groups/create")
+async def create_instance_group(cigr: CreateInstanceGroupRequest, username=Depends(get_current_user)):
+    # 1. 验证实例ID是否存在
+    col_instances = controller.db["instances"]
+    instances = []
+    for i in range(len(cigr.instance_names)):
+        instance_name = cigr.instance_names[i]
+        node_id = cigr.instance_node_ids[i]
+        instance_doc = col_instances.find_one({"instance_name": instance_name, "node_id": node_id})
+        if not instance_doc:
+            raise HTTPException(status_code=404, detail=f"Instance {instance_name}@{node_id} not found")
+        instance = Instance.model_validate(instance_doc)
+        instances.append(instance)
+
+    # 2. 创建实例组
+    group = InstanceGroup(owner_username=username, group_name=cigr.group_name, instances=instances)
+
+    col_groups = controller.db["instance_groups"]
+    col_groups.insert_one(group.model_dump())
+
+    return {"message": f"Instance group {cigr.group_name} created successfully"}
+
+
+# 获取用户的实例组列表
+@app.get("/instance_groups/list")
+async def list_instance_groups(username=Depends(get_current_user)):
+    col_groups = controller.db["instance_groups"]
+    groups_cursor = col_groups.find({"owner_username": username}).sort("created_at", -1)
+    groups = [InstanceGroup.model_validate(group_doc).model_dump() for group_doc in groups_cursor]
+    return groups
+
+
+# 获取实例组详情
+@app.get("/instance_groups/detail/{group_name}")
+async def get_instance_group_detail(group_name: str, username=Depends(get_current_user)):
+    col_groups = controller.db["instance_groups"]
+    group_doc = col_groups.find_one({"owner_username": username, "group_name": group_name})
+    if not group_doc:
+        raise HTTPException(status_code=404, detail="Instance group not found")
+    group = InstanceGroup.model_validate(group_doc)
+    return group.model_dump()
+
+
+class InstanceStatus(BaseModel):
+    instance_name: str
+    node_id: str
+    status: str  # RUNNING | STOPPED | ERROR | NOT_FOUND | UNKNOWN
+
+
+# 查询实例组中的实例状态
+@app.get("/instance_groups/{group_name}/instances_status")
+async def get_instance_group_instances_status(group_name: str, username=Depends(get_current_user)):
+    col_groups = controller.db["instance_groups"]
+    group_doc = col_groups.find_one({"owner_username": username, "group_name": group_name})
+    if not group_doc:
+        raise HTTPException(status_code=404, detail="Instance group not found")
+    group = InstanceGroup.model_validate(group_doc)
+
+    col_instances = controller.db["instances"]
+    instances_status = []
+    for instance in group.instances:
+        instance_doc = col_instances.find_one({"instance_name": instance.instance_name, "node_id": instance.node_id})
+        if instance_doc:
+            status = instance_doc.get("status", "UNKNOWN")
+            instances_status.append(
+                InstanceStatus(
+                    instance_name=instance.instance_name, node_id=instance.node_id, status=status
+                ).model_dump()
+            )
+        else:
+            instances_status.append(
+                InstanceStatus(
+                    instance_name=instance.instance_name, node_id=instance.node_id, status="NOT_FOUND"
+                ).model_dump()
+            )
+
+    return instances_status
+
+
+# 删除实例组
+@app.post("/instance_groups/delete/{group_name}")
+async def delete_instance_group(group_name: str, username=Depends(get_current_user)):
+    col_groups = controller.db["instance_groups"]
+    result = col_groups.delete_one({"owner_username": username, "group_name": group_name})
+    if result.deleted_count == 1:
+        return {"message": f"Instance group {group_name} deleted successfully"}
+    else:
+        raise HTTPException(status_code=404, detail="Instance group not found")
+
+
+# 实例组内批量停止实例
+@app.post("/instance_groups/stop_instances/{group_name}")
+async def stop_instance_group_instances(group_name: str, username=Depends(get_current_user)):
+    col_groups = controller.db["instance_groups"]
+    group_doc = col_groups.find_one({"owner_username": username, "group_name": group_name})
+    if not group_doc:
+        raise HTTPException(status_code=404, detail="Instance group not found")
+    group = InstanceGroup.model_validate(group_doc)
+
+    col_instance_tasks = controller.db["instance_tasks"]
+    for instance in group.instances:
+        mit = InstanceTask(
+            type="STOP",
+            instance_name=instance.instance_name,
+            node_id=instance.node_id,
+            status="INIT",
+            owner_username=username,
+        )
+        col_instance_tasks.insert_one(mit.model_dump())
+
+    return {"message": f"Stop tasks for all instances in group {group_name} created successfully"}
+
+
+# 实例组内批量恢复实例
+@app.post("/instance_groups/resume_instances/{group_name}")
+async def resume_instance_group_instances(group_name: str, username=Depends(get_current_user)):
+    col_groups = controller.db["instance_groups"]
+    group_doc = col_groups.find_one({"owner_username": username, "group_name": group_name})
+    if not group_doc:
+        raise HTTPException(status_code=404, detail="Instance group not found")
+    group = InstanceGroup.model_validate(group_doc)
+
+    col_instance_tasks = controller.db["instance_tasks"]
+    for instance in group.instances:
+        mit = InstanceTask(
+            type="RESUME",
+            instance_name=instance.instance_name,
+            node_id=instance.node_id,
+            status="INIT",
+            owner_username=username,
+        )
+        col_instance_tasks.insert_one(mit.model_dump())
+
+    return {"message": f"Resume tasks for all instances in group {group_name} created successfully"}
+
+
+# 实例组内批量部署实例
+@app.post("/instance_groups/deploy_instances/{group_name}")
+async def deploy_instance_group_instances(group_name: str, username=Depends(get_current_user)):
+    col_groups = controller.db["instance_groups"]
+    group_doc = col_groups.find_one({"owner_username": username, "group_name": group_name})
+    if not group_doc:
+        raise HTTPException(status_code=404, detail="Instance group not found")
+    group = InstanceGroup.model_validate(group_doc)
+
+    col_instance_tasks = controller.db["instance_tasks"]
+    for instance in group.instances:
+        mit = InstanceTask(
+            owner_username=username,
+            type="DEPLOY",
+            instance_name=instance.instance_name,
+            node_id=instance.node_id,
+            port=instance.port,
+            model_path=instance.model_path,
+            mmproj_path=instance.mmproj_path,
+            status="INIT",
+        )
+        col_instance_tasks.insert_one(mit.model_dump())
+
+    return {"message": f"Deploy tasks for all instances in group {group_name} created successfully"}
+
+
+# 实例组内批量删除实例
+@app.post("/instance_groups/delete_instances/{group_name}")
+async def delete_instance_group_instances(group_name: str, username=Depends(get_current_user)):
+    col_groups = controller.db["instance_groups"]
+    group_doc = col_groups.find_one({"owner_username": username, "group_name": group_name})
+    if not group_doc:
+        raise HTTPException(status_code=404, detail="Instance group not found")
+    group = InstanceGroup.model_validate(group_doc)
+
+    col_instances = controller.db["instances"]
+    for instance in group.instances:
+        col_instances.delete_one({"instance_name": instance.instance_name, "node_id": instance.node_id})
+
+    return {"message": f"All instances in group {group_name} deleted successfully"}

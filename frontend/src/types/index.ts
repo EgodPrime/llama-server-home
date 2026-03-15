@@ -11,6 +11,7 @@ export interface Node {
 
 // Instance
 export interface Instance {
+  owner_username?: string;
   instance_name: string;
   node_id: string;
   status?: string; // "RUNNING" | "STOPPED" | "ERROR" | "RESTARTING"
@@ -19,8 +20,6 @@ export interface Instance {
   port?: number;
   model_path: string;
   mmproj_path?: string;
-  local_model_path?: string;
-  local_mmproj_path?: string;
   model_size_b?: number;
   env?: Record<string, string>;
   config?: Record<string, any>;
@@ -33,6 +32,7 @@ export interface Instance {
 
 // InstanceTask
 export interface InstanceTask {
+  owner_username?: string;
   task_id?: string;
   type: string; // DEPLOY | STOP | RESUME | MODIFY
   instance_name: string;
@@ -90,4 +90,18 @@ export interface Metric {
   cpu: CPUInfo;
   memory: MemoryInfo;
   gpus: GPUInfo[];
+}
+
+export interface User {
+  username: string;
+  role: string; // "admin" | "user"
+  created_at: number;
+  last_login_at?: number;
+}
+
+export interface InstanceGroup {
+  owner_username: string;
+  group_name: string;
+  instances: Instance[];
+  created_at?: number;
 }

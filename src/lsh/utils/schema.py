@@ -28,6 +28,7 @@ class Node(BaseModel):
 
 
 class Instance(BaseModel):
+    owner_username: Optional[str] = None
     instance_name: str
     node_id: str
 
@@ -39,8 +40,6 @@ class Instance(BaseModel):
 
     model_path: str
     mmproj_path: Optional[str] = None
-    local_model_path: Optional[str] = None
-    local_mmproj_path: Optional[str] = None
     model_size_b: Optional[float] = None
 
     env: Optional[Dict[str, str]] = None
@@ -56,6 +55,7 @@ class Instance(BaseModel):
 
 class InstanceTask(BaseModel):
     task_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    owner_username: Optional[str] = None
     type: str  # DEPLOY | STOP | RESUME | MODIFY
     instance_name: str
     node_id: str
@@ -141,4 +141,11 @@ class User(BaseModel):
     last_login_at: Optional[float] = None
 
 
-__all__ = ["Node", "InstanceTask", "Instance", "Log", "Metric", "User"]
+class InstanceGroup(BaseModel):
+    owner_username: str
+    group_name: str
+    instances: List[Instance]
+    created_at: Optional[float] = Field(default_factory=time.time)
+
+
+__all__ = ["Node", "InstanceTask", "Instance", "Log", "Metric", "User", "InstanceGroup"]
