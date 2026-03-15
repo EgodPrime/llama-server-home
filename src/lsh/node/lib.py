@@ -31,6 +31,9 @@ class NodeAgent:
         )
 
     def register_self(self):
+        """
+        向数据库注册自己，如果已经存在则更新信息
+        """
         col = self.db["nodes"]
         existing_node = col.find_one({"node_id": self.node.node_id})
         if existing_node:
@@ -41,11 +44,17 @@ class NodeAgent:
             logger.info(f"Registered new node: {self.node.node_id}")
 
     def heartbeat(self):
+        """
+        发送心跳信号，更新数据库中的last_heartbeat字段和状态为ONLINE
+        """
         col = self.db["nodes"]
         col.update_one({"node_id": self.node.node_id}, {"$set": {"last_heartbeat": time.time(), "status": "ONLINE"}})
         logger.trace(f"Node {self.node.node_id} sent heartbeat.")
 
     def updaate_metric(self):
+        """
+        更新节点指标信息，插入一条新的记录，如果当前记录数超过20条，则删除最旧的一条
+        """
         metric = Metric(
             node_id=self.node.node_id,
             timestamp=time.time(),
@@ -62,6 +71,9 @@ class NodeAgent:
         logger.trace(f"Node {self.node.node_id} updated metrics")
 
     def self_maintenance(self):
+        """
+        自动维护节点状态，定期发送心跳和更新指标
+        """
         while True:
             t0 = time.time()
             self.heartbeat()
@@ -69,9 +81,29 @@ class NodeAgent:
             elapsed = time.time() - t0
             time.sleep(max(0, self.heartbeat_interval - elapsed))
 
+    def update_instance_log(self, instance: Instance):
+        """
+        更新实例日志，读取实例对应的日志文件的最新内容(最后50行)，存储到数据库中
+        """
+        log_file = f"/tmp/{instance.instance_name}.log"
+        try:
+            with open(log_file, "r") as f:
+                lines = f.readlines()[-50:]
+                content = "".join(lines)
+        except Exception as e:
+            content = f"Failed to read log file: {e}"
+        col = self.db["logs"]
+        col.update_one(
+            {"node_id": instance.node_id, "instance_name": instance.instance_name},
+            {"$set": {"content": content, "last_updated_at": time.time()}},
+            upsert=True,
+        )
+
     def instance_maintenance(self):
         """
-        检查数据库中所有node_id为自己的实例，验证它们的状态是否正常（对应的进程还在吗？端口还在监听吗？），如果发现异常则更新状态为FAILED，并记录错误信息
+        检查数据库中所有node_id为自己的实例，
+        验证它们的状态是否正常（对应的进程还在吗？端口还在监听吗？），
+        如果发现异常则更新状态为FAILED，并记录错误信息，顺便更新一下实例日志
         """
         col = self.db["instances"]
         while True:
@@ -102,10 +134,16 @@ class NodeAgent:
                             cfg["last_error"] = None
                 col.update_one({"_id": inst_doc["_id"]}, {"$set": cfg})
 
+                if works_fine:
+                    self.update_instance_log(instance)
+
             elapsed = time.time() - t0
             time.sleep(max(0, self.heartbeat_interval - elapsed))
 
     def deploy_instance(self, task: InstanceTask):
+        """
+        部署实例
+        """
         log_file = f"/tmp/{task.instance_name}.log"
         cmd_list = [
             str(self.node.llama_path),

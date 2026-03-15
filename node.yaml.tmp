@@ -2,6 +2,6 @@ mongodb_url: "mongodb://localhost:27017"
 mongodb_name: "lsh"
 heartbeat_interval: 5 # seconds
 name: "local_node"
-ip_address: "localhost"
+ip_address: "0.0.0.0"
 llama_path: "path/to/llama-server"
 nfs_path: "path/to/nfs"
