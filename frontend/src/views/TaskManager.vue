@@ -42,8 +42,8 @@ const columns = [
   },
   {
     title: '完成时间',
-    dataIndex: 'completed_at',
-    key: 'completed_at',
+    dataIndex: 'finished_at',
+    key: 'finished_at',
     customRender: ({ text }: { text: number | undefined }) => {
       if (typeof text !== 'number' || !text) return '';
       const date = new Date(text * 1000);
