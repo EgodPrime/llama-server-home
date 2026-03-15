@@ -3,11 +3,11 @@ import threading
 import time
 from contextlib import asynccontextmanager
 
-from pydantic import BaseModel
 import bcrypt
 import fastapi
 import jwt
 from fastapi import HTTPException, Request
+from pydantic import BaseModel
 
 from lsh.controller.lib import Controller
 from lsh.repo.metrics import get_metrics_last_n
@@ -187,9 +187,11 @@ def verify_passwd(password: str, hashed: bytes) -> bool:
     passwdb = password.encode("utf-8")
     return bcrypt.checkpw(passwdb, hashed)
 
+
 class LoginRequest(BaseModel):
     username: str
     password: str
+
 
 @app.post("/user/register")
 async def register_user(request: LoginRequest):
@@ -202,7 +204,6 @@ async def register_user(request: LoginRequest):
     user = User(username=username, password_hash=password_hash)
     col.insert_one(user.model_dump())
     return {"message": f"User {username} registered successfully"}
-
 
 
 @app.post("/user/login")

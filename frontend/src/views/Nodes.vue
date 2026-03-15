@@ -1,20 +1,6 @@
 <template>
   <div>
     <h2>节点列表</h2>
-    <button
-      @click="goToCreateTask"
-      style="
-        margin-bottom: 16px;
-        background: #1979c6;
-        color: #fff;
-        border: none;
-        border-radius: 6px;
-        padding: 8px 18px;
-        font-weight: 600;
-      "
-    >
-      创建实例
-    </button>
     <a-table :dataSource="nodes" :columns="columns" rowKey="node_id">
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'action'">
@@ -36,10 +22,6 @@ const router = useRouter();
 
 function goToMetrics(nodeId: string) {
   router.push({ name: 'Metrics', params: { node_id: nodeId } });
-}
-
-function goToCreateTask() {
-  router.push({ name: 'CreateInstanceTask' });
 }
 
 const columns = [
