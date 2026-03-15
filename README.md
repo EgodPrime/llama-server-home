@@ -50,6 +50,8 @@ sudo apt install nfs-utils
 sudo apt update
 sudo apt install nfs-common
 uv python install python@3.13
+# 节点需要自行安装llama.cpp, 安装方法请参考官方文档：
+# https://github.com/ggml-org/llama.cpp
 ```
 
 ### Step 1: 存储中心
@@ -99,6 +101,7 @@ uv venv
 uv pip install -e .
 cp node.yaml.tmp node.yaml
 # 修改node.yaml中的mongodb_url、name、ip、llama_path和nfs_path为实际值
+# llama_path是llama.cpp中llama-server程序的路径
 vim node.yaml
 uv run run-node
 ```
