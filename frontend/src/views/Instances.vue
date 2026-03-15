@@ -34,7 +34,7 @@
           </button>
           <button
             style="color: #52c41a; margin-right: 8px"
-            :disabled="record.status !== 'STOPPED'"
+            :disabled="record.status === 'RUNNING'"
             @click="handleResume(record.node_id, record.instance_name)"
           >
             恢复
@@ -70,7 +70,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, h } from 'vue';
 import { useRouter } from 'vue-router';
 import { Instance } from '@/types/index.js';
 import {
@@ -105,7 +105,28 @@ function goToCreateTask() {
 const columns = [
   { title: '实例名称', dataIndex: 'instance_name', key: 'instance_name' },
   { title: '节点ID', dataIndex: 'node_id', key: 'node_id' },
-  { title: '状态', dataIndex: 'status', key: 'status' },
+  {
+    title: '状态',
+    dataIndex: 'status',
+    key: 'status',
+    customRender: ({ text }: { text: string }) => {
+      let color = '#595959';
+      switch (text) {
+        case 'RUNNING':
+          color = '#52c41a';
+          break;
+        case 'STOPPED':
+          color = '#faad14';
+          break;
+        case 'ERROR':
+          color = '#ff4d4f';
+          break;
+        default:
+          color = '#595959';
+      }
+      return h('span', { style: { color, fontWeight: 'bold' } }, text);
+    },
+  },
   { title: '端口', dataIndex: 'port', key: 'port' },
   {
     title: '最近心跳',

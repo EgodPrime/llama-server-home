@@ -26,7 +26,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, h } from 'vue';
 import { listNodes } from '@/api/index.js';
 import { Node } from '@/types/index.js';
 import { useRouter } from 'vue-router';
@@ -46,7 +46,25 @@ const columns = [
   { title: '节点ID', dataIndex: 'node_id', key: 'node_id' },
   { title: '名称', dataIndex: 'name', key: 'name' },
   { title: 'IP地址', dataIndex: 'ip_address', key: 'ip_address' },
-  { title: '状态', dataIndex: 'status', key: 'status' },
+  {
+    title: '状态',
+    dataIndex: 'status',
+    key: 'status',
+    customRender: ({ text }: { text: string }) => {
+      let color = '#595959';
+      switch (text) {
+        case 'ONLINE':
+          color = '#52c41a'; // 绿色
+          break;
+        case 'OFFLINE':
+          color = '#ff4d4f'; // 红色
+          break;
+        default:
+          color = '#595959'; // 默认灰色
+      }
+      return h('span', { style: { color, fontWeight: 'bold' } }, text);
+    },
+  },
   {
     title: '注册时间',
     dataIndex: 'registered_at',
