@@ -234,6 +234,15 @@ class NodeAgent:
             },
         )
 
+    def get_instance_from_task(self, task: InstanceTask) -> Instance:
+        col = self.db["instances"]
+        instance_doc = col.find_one({"node_id": task.node_id, "instance_name": task.instance_name})
+        if not instance_doc:
+            raise RuntimeError(f"Instance {task.instance_name} not found on node {task.node_id}")
+        instance = Instance.model_validate(instance_doc)
+        return instance
+
+
     def handle_instance_task(self):
         col = self.db["instance_tasks"]
         while True:
@@ -246,23 +255,19 @@ class NodeAgent:
                 err_msg = None
                 result = None
                 try:
-                    logger.info(f"Node {self.node.node_id} handling manage instance task: {task.task_id}")
+                    logger.info(f"Node {self.node.node_id} handling instance task: {task.task_id}")
                     col.update_one(
                         {"task_id": task.task_id}, {"$set": {"status": "PROCESSING", "started_at": time.time()}}
                     )
-                    instance_doc = self.db["instances"].find_one(
-                        {"node_id": task.node_id, "instance_name": task.instance_name}
-                    )
-                    if not instance_doc:
-                        raise RuntimeError(f"Instance {task.instance_name} not found on node {task.node_id}")
-                    instance = Instance.model_validate(instance_doc)
                     # 根据任务类型执行相应操作
                     match task.type:
                         case "DEPLOY":
                             self.deploy_instance(task)
                         case "STOP":
+                            instance = self.get_instance_from_task(task)
                             self.stop_instance(instance)
                         case "RESUME":
+                            instance = self.get_instance_from_task(task)
                             # 恢复实例：重新启动一个新的进程，更新实例状态为RUNNING
                             self.resume_instance(instance)
                         case _:
