@@ -123,6 +123,7 @@ class NodeAgent:
                         works_fine = True
                 except Exception as e:
                     err_msg = str(e)
+                    logger.info(f"Instance {instance.instance_name}@{instance.node_id} seems to have an issue: {err_msg}")
                 cfg = {"last_heartbeat": time.time()}
                 match instance.status:
                     case "RUNNING":
