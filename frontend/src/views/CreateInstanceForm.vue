@@ -124,7 +124,7 @@ const envSelect = ref('');
 const configList = ref<{ key: string; value: string }[]>([
   { key: '--n-gpu-layers', value: '999' },
   { key: '--ctx-size', value: '131072' },
-  { key: '--parallel', value: '16' },
+  { key: '--parallel', value: '1' },
   { key: '--batch-size', value: '8192' },
   { key: '--n-predict', value: '16384' },
   { key: '--temp', value: '0.7' },
@@ -135,9 +135,11 @@ const configList = ref<{ key: string; value: string }[]>([
   { key: '--frequency-penalty', value: '0.0' },
   { key: '--repeat-penalty', value: '1.0' },
   { key: '--threads', value: '4' },
-  { key: '--flash-attn', value: 'auto' },
-  { key: '--split-mode', value: 'none' },
+  { key: '--flash-attn', value: 'on' },
+  { key: '--split-mode', value: 'layer' },
   { key: '--tensor-split', value: '0.5,0.5' },
+  //--chat-template-kwargs "{\"enable_thinking\": false}"
+  { key: '--chat-template-kwargs', value: '{"enable_thinking": false}' },
 ]);
 const configSelect = ref('');
 
