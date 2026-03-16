@@ -1,5 +1,13 @@
 import axios from 'axios';
-import { Node, Metric, Instance, InstanceTask, Log } from '../types/index.js';
+import {
+  Node,
+  Metric,
+  Instance,
+  InstanceTask,
+  Log,
+  InstanceGroup,
+  InstanceStatus,
+} from '../types/index.js';
 
 // 自动在请求头中添加 Token
 axios.interceptors.request.use((config) => {
@@ -20,6 +28,7 @@ axios.interceptors.response.use(
 
       // 1. 清除本地 Token
       localStorage.removeItem('token');
+      localStorage.removeItem('username');
 
       // 2. 跳转到登录页
       window.location.href = '/login';
@@ -117,9 +126,89 @@ export async function listNfsModels(): Promise<any[]> {
 /* 用户认证相关 API */
 
 export async function register(username: string, password: string): Promise<{ message: string }> {
-  return axios.post('/api/user/register', { username, password });
+  const res = await axios.post('/api/user/register', { username, password });
+  return res.data;
 }
 
 export async function login(username: string, password: string): Promise<{ token: string }> {
-  return axios.post('/api/user/login', { username, password });
+  const res = await axios.post('/api/user/login', { username, password });
+  return res.data;
+}
+
+// --- 实例组相关 API --- //
+
+// 创建实例组
+export async function createInstanceGroup(
+  groupName: string,
+  instanceNames: string[],
+  instanceNodeIds: string[]
+): Promise<{ message: string }> {
+  const res = await axios.post('/api/instance_groups/create', {
+    group_name: groupName,
+    instance_names: instanceNames,
+    instance_node_ids: instanceNodeIds,
+  });
+  return res.data;
+}
+
+// 获取实例组列表
+export async function listInstanceGroups(): Promise<InstanceGroup[]> {
+  const res = await axios.get('/api/instance_groups/list');
+  return res.data;
+}
+
+// 获取实例组详情
+export async function getInstanceGroupDetail(groupName: string): Promise<InstanceGroup> {
+  const res = await axios.get(`/api/instance_groups/detail/${encodeURIComponent(groupName)}`);
+  return res.data;
+}
+
+// 查询实例组内所有实例状态
+export async function getInstanceGroupInstancesStatus(
+  groupName: string
+): Promise<InstanceStatus[]> {
+  const res = await axios.get(
+    `/api/instance_groups/${encodeURIComponent(groupName)}/instances_status`
+  );
+  return res.data;
+}
+
+// 批量部署实例组
+export async function deployInstanceGroup(groupName: string): Promise<{ message: string }> {
+  const res = await axios.post(
+    `/api/instance_groups/deploy_instances/${encodeURIComponent(groupName)}`
+  );
+  return res.data;
+}
+
+// 批量关闭实例组
+export async function stopInstanceGroup(groupName: string): Promise<{ message: string }> {
+  const res = await axios.post(
+    `/api/instance_groups/stop_instances/${encodeURIComponent(groupName)}`
+  );
+  return res.data;
+}
+
+// 批量恢复实例组
+export async function resumeInstanceGroup(groupName: string): Promise<{ message: string }> {
+  const res = await axios.post(
+    `/api/instance_groups/resume_instances/${encodeURIComponent(groupName)}`
+  );
+  return res.data;
+}
+
+// 批量删除实例组内所有实例
+export async function deleteInstanceGroupInstances(
+  groupName: string
+): Promise<{ message: string }> {
+  const res = await axios.post(
+    `/api/instance_groups/delete_instances/${encodeURIComponent(groupName)}`
+  );
+  return res.data;
+}
+
+// 删除实例组
+export async function deleteInstanceGroup(groupName: string): Promise<{ message: string }> {
+  const res = await axios.post(`/api/instance_groups/delete/${encodeURIComponent(groupName)}`);
+  return res.data;
 }

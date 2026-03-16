@@ -55,7 +55,6 @@ const columns = [
 
 onMounted(async () => {
   tasks.value = await listInstanceTasks();
-  console.log('Fetched tasks:', tasks.value);
 });
 </script>
 

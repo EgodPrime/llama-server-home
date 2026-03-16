@@ -74,18 +74,17 @@ async function handleLogin() {
     localStorage.setItem('token', res.token);
     localStorage.setItem('username', formState.username);
     message.success('登录成功，正在跳转...');
-    // 延迟跳转以便用户看到提示
-    setTimeout(() => {
+    // 如果有历史记录则返回上一页，否则跳转到首页
+    if (window.history.length > 1) {
+      router.go(-1);
+    } else {
       router.push('/');
-    }, 500);
+    }
   } catch (e) {
     message.error('登录失败，请检查账号密码');
   } finally {
     loading.value = false;
   }
-
-  // 刷新页面
-  window.location.reload();
 }
 
 // 注册处理

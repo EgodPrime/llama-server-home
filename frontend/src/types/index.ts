@@ -92,6 +92,13 @@ export interface Metric {
   gpus: GPUInfo[];
 }
 
+// InstanceStatus（用于实例组内实例状态查询）
+export interface InstanceStatus {
+  instance_name: string;
+  node_id: string;
+  status: string; // "RUNNING" | "STOPPED" | "ERROR" | "NOT_FOUND" | "UNKNOWN"
+}
+
 export interface User {
   username: string;
   role: string; // "admin" | "user"

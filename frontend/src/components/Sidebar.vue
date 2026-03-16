@@ -19,6 +19,12 @@
     <router-link to="/tasks" class="nav-item" :class="{ active: $route.path.startsWith('/tasks') }"
       >任务管理</router-link
     >
+    <router-link
+      to="/instance-groups"
+      class="nav-item"
+      :class="{ active: $route.path.startsWith('/instance-groups') }"
+      >实例组管理</router-link
+    >
   </div>
 </template>
 

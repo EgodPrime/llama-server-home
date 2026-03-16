@@ -17,6 +17,35 @@ from lsh.utils.schema import Instance, InstanceGroup, InstanceTask, Log, User
 controller = Controller()
 
 
+async def get_current_user(request: Request) -> User:
+    token = request.headers.get("Authorization")
+    if not token:
+        raise HTTPException(status_code=401, detail="Authorization token is missing")
+    token = token.replace("Bearer ", "")
+    try:
+        payload = jwt.decode(token, "kb310", algorithms=["HS256"])
+        username = payload.get("username")
+        if not username:
+            raise HTTPException(status_code=401, detail="Invalid token: username missing")
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    col = controller.db["users"]
+    user_doc = col.find_one({"username": username})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user = User.model_validate(user_doc)
+    return user
+
+
+async def get_current_user_name(request: Request) -> str:
+    user = await get_current_user(request)
+    return user.username
+
+
 @asynccontextmanager
 async def lifespan(app: fastapi.FastAPI):
     print("[APP] 启动生命周期...")
@@ -78,7 +107,7 @@ async def delete_instance_task(task_id: str):
 
 # 实例列表
 @app.get("/instances/list_instances")
-async def list_instances():
+async def list_instances(username=Depends(get_current_user_name)):
     col = controller.db["instances"]
     instances = col.find().sort("created_at", -1)
     return [Instance.model_validate(instance).model_dump() for instance in instances]
@@ -215,10 +244,10 @@ async def login_user(request: LoginRequest):
     col = controller.db["users"]
     user_doc = col.find_one({"username": username})
     if not user_doc:
-        raise HTTPException(status_code=401, detail="Invalid username or password")
+        raise HTTPException(status_code=404, detail="Invalid username or password")
     user = User.model_validate(user_doc)
     if not verify_passwd(password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid username or password")
+        raise HTTPException(status_code=404, detail="Invalid username or password")
     # 更新最后登录时间
     col.update_one({"username": username}, {"$set": {"last_login_at": time.time()}})
     # 生成JWT token
@@ -265,33 +294,9 @@ class CreateInstanceGroupRequest(BaseModel):
     instance_node_ids: List[str]
 
 
-async def get_current_user(request: Request) -> User:
-    token = request.headers.get("Authorization")
-    if not token:
-        raise HTTPException(status_code=401, detail="Authorization token is missing")
-    token = token.replace("Bearer ", "")
-    try:
-        payload = jwt.decode(token, "kb310", algorithms=["HS256"])
-        username = payload.get("username")
-        if not username:
-            raise HTTPException(status_code=401, detail="Invalid token: username missing")
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    col = controller.db["users"]
-    user_doc = col.find_one({"username": username})
-    if not user_doc:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    user = User.model_validate(user_doc)
-    return user
-
-
 # 创建一个实例组
 @app.post("/instance_groups/create")
-async def create_instance_group(cigr: CreateInstanceGroupRequest, username=Depends(get_current_user)):
+async def create_instance_group(cigr: CreateInstanceGroupRequest, username=Depends(get_current_user_name)):
     # 1. 验证实例ID是否存在
     col_instances = controller.db["instances"]
     instances = []
@@ -315,7 +320,7 @@ async def create_instance_group(cigr: CreateInstanceGroupRequest, username=Depen
 
 # 获取用户的实例组列表
 @app.get("/instance_groups/list")
-async def list_instance_groups(username=Depends(get_current_user)):
+async def list_instance_groups(username=Depends(get_current_user_name)):
     col_groups = controller.db["instance_groups"]
     groups_cursor = col_groups.find({"owner_username": username}).sort("created_at", -1)
     groups = [InstanceGroup.model_validate(group_doc).model_dump() for group_doc in groups_cursor]
@@ -324,7 +329,7 @@ async def list_instance_groups(username=Depends(get_current_user)):
 
 # 获取实例组详情
 @app.get("/instance_groups/detail/{group_name}")
-async def get_instance_group_detail(group_name: str, username=Depends(get_current_user)):
+async def get_instance_group_detail(group_name: str, username=Depends(get_current_user_name)):
     col_groups = controller.db["instance_groups"]
     group_doc = col_groups.find_one({"owner_username": username, "group_name": group_name})
     if not group_doc:
@@ -341,7 +346,7 @@ class InstanceStatus(BaseModel):
 
 # 查询实例组中的实例状态
 @app.get("/instance_groups/{group_name}/instances_status")
-async def get_instance_group_instances_status(group_name: str, username=Depends(get_current_user)):
+async def get_instance_group_instances_status(group_name: str, username=Depends(get_current_user_name)):
     col_groups = controller.db["instance_groups"]
     group_doc = col_groups.find_one({"owner_username": username, "group_name": group_name})
     if not group_doc:
@@ -371,7 +376,7 @@ async def get_instance_group_instances_status(group_name: str, username=Depends(
 
 # 删除实例组
 @app.post("/instance_groups/delete/{group_name}")
-async def delete_instance_group(group_name: str, username=Depends(get_current_user)):
+async def delete_instance_group(group_name: str, username=Depends(get_current_user_name)):
     col_groups = controller.db["instance_groups"]
     result = col_groups.delete_one({"owner_username": username, "group_name": group_name})
     if result.deleted_count == 1:
@@ -382,7 +387,7 @@ async def delete_instance_group(group_name: str, username=Depends(get_current_us
 
 # 实例组内批量停止实例
 @app.post("/instance_groups/stop_instances/{group_name}")
-async def stop_instance_group_instances(group_name: str, username=Depends(get_current_user)):
+async def stop_instance_group_instances(group_name: str, username=Depends(get_current_user_name)):
     col_groups = controller.db["instance_groups"]
     group_doc = col_groups.find_one({"owner_username": username, "group_name": group_name})
     if not group_doc:
@@ -405,7 +410,7 @@ async def stop_instance_group_instances(group_name: str, username=Depends(get_cu
 
 # 实例组内批量恢复实例
 @app.post("/instance_groups/resume_instances/{group_name}")
-async def resume_instance_group_instances(group_name: str, username=Depends(get_current_user)):
+async def resume_instance_group_instances(group_name: str, username=Depends(get_current_user_name)):
     col_groups = controller.db["instance_groups"]
     group_doc = col_groups.find_one({"owner_username": username, "group_name": group_name})
     if not group_doc:
@@ -428,7 +433,7 @@ async def resume_instance_group_instances(group_name: str, username=Depends(get_
 
 # 实例组内批量部署实例
 @app.post("/instance_groups/deploy_instances/{group_name}")
-async def deploy_instance_group_instances(group_name: str, username=Depends(get_current_user)):
+async def deploy_instance_group_instances(group_name: str, username=Depends(get_current_user_name)):
     col_groups = controller.db["instance_groups"]
     group_doc = col_groups.find_one({"owner_username": username, "group_name": group_name})
     if not group_doc:
@@ -454,7 +459,7 @@ async def deploy_instance_group_instances(group_name: str, username=Depends(get_
 
 # 实例组内批量删除实例
 @app.post("/instance_groups/delete_instances/{group_name}")
-async def delete_instance_group_instances(group_name: str, username=Depends(get_current_user)):
+async def delete_instance_group_instances(group_name: str, username=Depends(get_current_user_name)):
     col_groups = controller.db["instance_groups"]
     group_doc = col_groups.find_one({"owner_username": username, "group_name": group_name})
     if not group_doc:

@@ -7,6 +7,8 @@ import CreateInstanceTask from '@/views/CreateInstanceForm.vue';
 import Instances from '@/views/Instances.vue';
 import NfsManager from '@/views/NfsManager.vue';
 import Login from '@/views/Login.vue';
+import InstanceGroups from '@/views/InstanceGroups.vue';
+import TaskManager from '@/views/TaskManager.vue';
 
 const routes: RouteRecordRaw[] = [
   { path: '/', name: 'Nodes', component: Nodes },
@@ -36,7 +38,13 @@ const routes: RouteRecordRaw[] = [
     },
   },
   { path: '/nfs', name: 'NfsManager', component: NfsManager },
-  { path: '/tasks', name: 'TaskManager', component: () => import('@/views/TaskManager.vue') },
+  { path: '/tasks', name: 'TaskManager', component: TaskManager },
+  {
+    path: '/instance-groups',
+    name: 'InstanceGroups',
+    component: InstanceGroups,
+    // meta: { requiresAuth: true }
+  },
 ];
 
 const router = createRouter({
