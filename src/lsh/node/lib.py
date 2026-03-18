@@ -136,9 +136,11 @@ class NodeAgent:
                         if works_fine:
                             cfg["status"] = "RUNNING"
                             cfg["last_error"] = None
-                        logger.warning(
-                            f"Instance {instance.instance_name}@{instance.node_id} seems alive. Updated to RUNNING."
-                        )
+                            logger.warning(
+                                f"Instance {instance.instance_name}@{instance.node_id} seems alive. Updated to RUNNING."
+                            )
+                        else:
+                            cfg["last_error"] = err_msg
                 col.update_one({"_id": inst_doc["_id"]}, {"$set": cfg})
 
                 if works_fine:

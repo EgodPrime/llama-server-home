@@ -83,7 +83,7 @@ uv pip install -e .
 cp controller.yaml.tmp controller.yaml
 # 修改controller.yaml中的mongodb_url和nfs_path为实际值
 vim controller.yaml
-uv run uvicorn src.lsh.controller.app:app --host 0.0.0.0 --port 8000
+uv run uvicorn src.lsh.controller.app.main:app --host 0.0.0.0 --port 8000
 ```
 
 > nfs挂载重启后可能会丢失，可以在/etc/fstab中添加一行来实现开机自动挂载：
@@ -128,7 +128,5 @@ npm run dev
 
 - [x] 增加用户功能，用户可以注册、登录，只有登录后才能创建部署任务，非登录用户只能查看
 - [x] 增加实例组功能，一个实例组可以同时部署多个模型到多个节点上，用户可以将多个已部署的实例勾选后保存成一个实例组，方便下次直接使用。
-- [ ] 增加node节点的模型缓存功能，节点在第二次及以后部署同一模型时可以直接使用缓存，减少部署时间
-- [ ] 创建部署任务页面在选择节点后，实时显示该节点的GPU资源使用情况，帮助用户选择GPU
 - [ ] 节点内部任务处理和节点巡检的并行优化，目前偏向于简单粗暴的串行实现
 - [ ] 意图驱动：用户在创建部署任务时输入自然语言描述，系统自动解析成部署参数并执行部署，用户也可以直接输入自然语言指令来管理实例，如“帮我把节点A上部署的模型X重启一下”，系统自动解析指令并执行
