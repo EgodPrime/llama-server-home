@@ -50,6 +50,7 @@ async def get_current_user_name(request: Request) -> str:
     user = await get_current_user(request)
     return user.username
 
+
 @asynccontextmanager
 async def lifespan(app):
     print("[APP] 启动生命周期...")

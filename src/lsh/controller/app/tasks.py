@@ -30,3 +30,20 @@ async def delete_instance_task(task_id: str):
         return {"message": f"Task {task_id} deleted"}
     else:
         return {"error": "Task not found"}
+
+
+@router.post("/stop_instance/{node_id}/{instance_name}")
+async def stop_instance(node_id: str, instance_name: str):
+    col = controller.db["instance_tasks"]
+    mit = InstanceTask(type="STOP", instance_name=instance_name, node_id=node_id, status="INIT")
+    col.insert_one(mit.model_dump())
+    return {"message": f"Instance {instance_name}@{node_id} stop task created"}
+
+
+# 恢复实例
+@router.post("/resume_instance/{node_id}/{instance_name}")
+async def resume_instance(node_id: str, instance_name: str):
+    col = controller.db["instance_tasks"]
+    mit = InstanceTask(type="RESUME", instance_name=instance_name, node_id=node_id, status="INIT")
+    col.insert_one(mit.model_dump())
+    return {"message": f"Instance {instance_name}@{node_id} resume task created"}
