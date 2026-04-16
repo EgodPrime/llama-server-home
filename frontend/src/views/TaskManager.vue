@@ -14,14 +14,23 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { listInstanceTasks, deleteInstanceTask } from '@/api/index.js';
+import { InstanceTask } from '@/types/index.js';
+import { useDateFormat } from '@/composables/useDateFormat';
+import { useConfirm } from '@/composables/useConfirm';
 
-const tasks = ref<any[]>([]);
+const tasks = ref<InstanceTask[]>([]);
+const { formatDate } = useDateFormat();
+const { confirm } = useConfirm();
 
 async function handleDelete(taskId: string) {
-  if (confirm('确定要删除该任务吗？')) {
-    await deleteInstanceTask(taskId);
-    tasks.value = await listInstanceTasks();
-  }
+  confirm({
+    title: '确认删除',
+    content: '确定要删除该任务吗？',
+    onConfirm: async () => {
+      await deleteInstanceTask(taskId);
+      tasks.value = await listInstanceTasks();
+    },
+  });
 }
 
 const columns = [
@@ -35,9 +44,7 @@ const columns = [
     dataIndex: 'created_at',
     key: 'created_at',
     customRender: ({ text }: { text: number | undefined }) => {
-      if (typeof text !== 'number' || !text) return '';
-      const date = new Date(text * 1000);
-      return date.toLocaleString('zh-CN', { hour12: false });
+      return formatDate(text);
     },
   },
   {
@@ -45,9 +52,7 @@ const columns = [
     dataIndex: 'finished_at',
     key: 'finished_at',
     customRender: ({ text }: { text: number | undefined }) => {
-      if (typeof text !== 'number' || !text) return '';
-      const date = new Date(text * 1000);
-      return date.toLocaleString('zh-CN', { hour12: false });
+      return formatDate(text);
     },
   },
   { title: '操作', key: 'action' },

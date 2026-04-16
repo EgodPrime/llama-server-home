@@ -70,7 +70,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, h } from 'vue';
+import { ref, h } from 'vue';
 import { useRouter } from 'vue-router';
 import { Instance } from '@/types/index.js';
 import {
@@ -81,11 +81,18 @@ import {
   getInstanceLogs,
 } from '@/api/index.js';
 import { message } from 'ant-design-vue';
+import { usePolling } from '@/composables/usePolling';
+import { useStatusColor } from '@/composables/useStatusColor';
+import { useDateFormat } from '@/composables/useDateFormat';
+import { useConfirm } from '@/composables/useConfirm';
 
 const instances = ref<Instance[]>([]);
 const router = useRouter();
 const logModalVisible = ref(false);
 const logContent = ref('');
+const { getColor } = useStatusColor();
+const { formatDate } = useDateFormat();
+const { confirm } = useConfirm();
 
 async function handleViewLog(nodeId: string, instanceName: string) {
   logContent.value = '加载中...';
@@ -93,7 +100,7 @@ async function handleViewLog(nodeId: string, instanceName: string) {
   try {
     const res = await getInstanceLogs(nodeId, instanceName);
     logContent.value = res.content || '日志内容为空';
-  } catch (e) {
+  } catch {
     logContent.value = '日志获取失败';
   }
 }
@@ -110,20 +117,7 @@ const columns = [
     dataIndex: 'status',
     key: 'status',
     customRender: ({ text }: { text: string }) => {
-      let color = '#595959';
-      switch (text) {
-        case 'RUNNING':
-          color = '#52c41a';
-          break;
-        case 'STOPPED':
-          color = '#faad14';
-          break;
-        case 'ERROR':
-          color = '#ff4d4f';
-          break;
-        default:
-          color = '#595959';
-      }
+      const color = getColor(text);
       return h('span', { style: { color, fontWeight: 'bold' } }, text);
     },
   },
@@ -133,9 +127,7 @@ const columns = [
     dataIndex: 'last_heartbeat',
     key: 'last_heartbeat',
     customRender: ({ text }: { text: number | undefined }) => {
-      if (typeof text !== 'number' || !text) return '';
-      const date = new Date(text * 1000);
-      return date.toLocaleString('zh-CN', { hour12: false });
+      return formatDate(text);
     },
   },
   {
@@ -145,42 +137,45 @@ const columns = [
 ];
 
 async function handleDelete(nodeId: string, instanceName: string) {
-  if (confirm('确定要删除该实例吗？')) {
-    const res = await deleteInstance(nodeId, instanceName);
-    message.success(res.message);
-    instances.value = await listInstances();
-  }
+  confirm({
+    title: '确认删除',
+    content: '确定要删除该实例吗？',
+    onConfirm: async () => {
+      const res = await deleteInstance(nodeId, instanceName);
+      message.success(res.message);
+      instances.value = await listInstances();
+    },
+  });
 }
 
 async function handleStop(nodeId: string, instanceName: string) {
-  if (confirm('确定要停止该实例吗？')) {
-    const res = await stopInstance(nodeId, instanceName);
-    message.success(res.message);
-    instances.value = await listInstances();
-  }
+  confirm({
+    title: '确认停止',
+    content: '确定要停止该实例吗？',
+    onConfirm: async () => {
+      const res = await stopInstance(nodeId, instanceName);
+      message.success(res.message);
+      instances.value = await listInstances();
+    },
+  });
 }
 
 async function handleResume(nodeId: string, instanceName: string) {
-  if (confirm('确定要恢复该实例吗？')) {
-    const res = await resumeInstance(nodeId, instanceName);
-    message.success(res.message);
-    instances.value = await listInstances();
-  }
+  confirm({
+    title: '确认恢复',
+    content: '确定要恢复该实例吗？',
+    onConfirm: async () => {
+      const res = await resumeInstance(nodeId, instanceName);
+      message.success(res.message);
+      instances.value = await listInstances();
+    },
+  });
 }
 
-let timer: ReturnType<typeof setInterval> | null = null;
-
-onMounted(async () => {
+const { start } = usePolling(async () => {
   instances.value = await listInstances();
-  timer = setInterval(async () => {
-    instances.value = await listInstances();
-  }, 1000);
-});
-
-import { onUnmounted } from 'vue';
-onUnmounted(() => {
-  if (timer) clearInterval(timer);
-});
+}, 1000, { immediate: true });
+start();
 </script>
 
 <style scoped>

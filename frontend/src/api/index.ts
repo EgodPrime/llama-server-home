@@ -1,4 +1,5 @@
 import axios from 'axios';
+import router from '@/router/index.js';
 import {
   Node,
   Metric,
@@ -30,8 +31,8 @@ axios.interceptors.response.use(
       localStorage.removeItem('token');
       localStorage.removeItem('username');
 
-      // 2. 跳转到登录页
-      window.location.href = '/login';
+      // 2. 跳转到登录页（使用 router 避免页面刷新）
+      router.push('/login');
     }
     return Promise.reject(error);
   }
@@ -108,17 +109,30 @@ export async function getInstanceLogs(nodeId: string, instanceName: string): Pro
 
 /* NFS 相关 API */
 
-export async function listNfsRoot(): Promise<any[]> {
+// NFS item types
+export interface NfsItem {
+  name: string;
+  nfs_path: string;
+  type: 'file' | 'directory';
+}
+
+export interface NfsModel {
+  model_name: string;
+  model_file?: string;
+  mmproj_file?: string;
+}
+
+export async function listNfsRoot(): Promise<NfsItem[]> {
   const res = await axios.get('/api/nfs/list_root');
   return res.data;
 }
 
-export async function listNfsDir(dirPath: string): Promise<any[]> {
+export async function listNfsDir(dirPath: string): Promise<NfsItem[]> {
   const res = await axios.get(`/api/nfs/list_dir/${encodeURIComponent(dirPath)}`);
   return res.data;
 }
 
-export async function listNfsModels(): Promise<any[]> {
+export async function listNfsModels(): Promise<NfsModel[]> {
   const res = await axios.get('/api/nfs/list_models');
   return res.data;
 }

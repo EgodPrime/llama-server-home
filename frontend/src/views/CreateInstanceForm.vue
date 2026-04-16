@@ -99,12 +99,15 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { listNodes, createInstance, listNfsModels } from '@/api/index.js';
+import type { NfsModel } from '@/api/index.js';
 import type { InstanceTask, Node } from '@/types/index.js';
 import { message } from 'ant-design-vue';
 
+const router = useRouter();
 const nodes = ref<Node[]>([]);
-const models = ref<any[]>([]);
+const models = ref<NfsModel[]>([]);
 const selectedModel = ref('');
 const form = ref<InstanceTask>({
   type: 'DEPLOY',
@@ -205,7 +208,7 @@ async function handleSubmit() {
   message.success(res.message);
   // 跳转到任务管理页面
   setTimeout(() => {
-    window.location.href = '/tasks';
+    router.push('/tasks');
   }, 1000);
 }
 </script>
@@ -296,14 +299,6 @@ button:hover {
   color: #888;
   margin-top: 6px;
 }
-.param-select-row {
-  margin-bottom: 10px;
-}
-.param-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
 .param-card {
   display: flex;
   align-items: center;
@@ -371,36 +366,4 @@ button:hover {
   cursor: pointer;
   border-radius: 8px;
 }
-.param-key {
-  font-weight: 500;
-  color: #1979c6;
-  min-width: 120px;
-}
-.param-input {
-  border: 1px solid #cfd8dc;
-  border-radius: 6px;
-  padding: 6px 8px;
-  font-size: 15px;
-  width: 180px;
-  background: #fff;
-}
-.param-remove {
-  background: #fff;
-  color: #ff4d4f;
-  border: 1px solid #ff4d4f;
-  border-radius: 50%;
-  width: 28px;
-  height: 28px;
-  font-size: 18px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.2s;
-}
-.param-remove:hover {
-  background: #ff4d4f;
-  color: #fff;
-}
-/* ...existing code... */
 </style>

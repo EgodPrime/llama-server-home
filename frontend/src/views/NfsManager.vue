@@ -45,33 +45,33 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue';
 import { listNfsRoot, listNfsDir, listNfsModels } from '@/api/index.js';
+import type { NfsItem, NfsModel } from '@/api/index.js';
 
 const onlyModels = ref(true);
-const models = ref<any[]>([]);
-const items = ref<any[]>([]);
+const models = ref<NfsModel[]>([]);
+const items = ref<NfsItem[]>([]);
 const pathStack = ref<string[]>([]);
 const currentPath = ref('');
 
-onMounted(async () => {
+async function loadData() {
   if (onlyModels.value) {
-    models.value = await listNfsModels();
-  } else {
-    items.value = await listNfsRoot();
-    currentPath.value = '';
-  }
-});
-
-watch(onlyModels, async (val) => {
-  if (val) {
     models.value = await listNfsModels();
   } else {
     items.value = await listNfsRoot();
     pathStack.value = [];
     currentPath.value = '';
   }
+}
+
+onMounted(async () => {
+  await loadData();
 });
 
-async function enterDir(item: any) {
+watch(onlyModels, async () => {
+  await loadData();
+});
+
+async function enterDir(item: NfsItem) {
   pathStack.value.push(item.name);
   const dirPath = pathStack.value.join('/');
   items.value = await listNfsDir(dirPath);

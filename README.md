@@ -112,7 +112,9 @@ uv run run-node
 
 ### Step 4: 前端
 
-> 默认在3000端口启动，如果需要修改请修改vite.config.js中的server.port字段
+前端支持开发模式（热更新）和生产环境（Nginx 部署）两种方式。
+
+#### 开发模式
 
 ```bash
 git clone https://github.com/EgodPrime/llama-server-home.git
@@ -122,6 +124,81 @@ npm install
 # 修改vite.config.js中的server.proxy.target为控制器的实际地址
 vim vite.config.js
 npm run dev
+```
+
+> 默认在 3000 端口启动，如果需要修改请修改 vite.config.js 中的 server.port 字段
+
+#### 生产环境部署（Nginx）
+
+**1. 构建前端**
+
+```bash
+cd frontend
+npm install
+npm run build
+```
+
+构建产物在 `frontend/dist/` 目录。
+
+**2. 配置 Nginx**
+
+将 dist 目录复制到 Web 根目录（避免加密 home 目录的权限问题）：
+
+```bash
+sudo mkdir -p /var/www/lsh
+sudo cp -r frontend/dist/* /var/www/lsh/
+sudo chown -R www-data:www-data /var/www/lsh
+```
+
+创建 Nginx 配置文件 `/etc/nginx/sites-enabled/lsh`：
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;  # 替换为你的域名或 IP
+
+    # 前端静态文件
+    root /var/www/lsh;
+    index index.html;
+
+    # Vue SPA 路由支持
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # 代理 API 到后端 FastAPI
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000/;  # 末尾的 / 去除 /api 前缀
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+**3. 启动 Nginx**
+
+```bash
+sudo nginx -t
+sudo nginx -s reload
+```
+
+> **注意**：如果后端 FastAPI 没有配置 CORS，前端必须通过同源代理（`/api/`）访问，否则浏览器会拒绝响应。
+
+如需 HTTPS，添加 SSL 配置：
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name your-domain.com;
+
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    # ... 以上 location 配置保持不变
+}
 ```
 
 ## Planned Features
