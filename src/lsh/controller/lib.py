@@ -1,3 +1,4 @@
+import os
 import time
 
 import pymongo
@@ -16,6 +17,10 @@ class Controller:
         self.db = self.mongo_client[cfg["mongodb_name"]]
         self.node_dead_threshold = int(cfg.get("node_dead_threshold", 60))
         self.nfs_path = cfg.get("nfs_path")
+        # JWT secret: env var > config file > raise error
+        self.jwt_secret = os.environ.get("JWT_SECRET", cfg.get("jwt_secret"))
+        if not self.jwt_secret:
+            raise RuntimeError("JWT_SECRET environment variable or jwt_secret config is required")
 
     # --- 核心功能：节点自动发现与巡检 ---
     def node_discovery_and_check(self):

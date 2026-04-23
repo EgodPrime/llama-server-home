@@ -44,7 +44,7 @@ async def login_user(request: LoginRequest):
         raise HTTPException(status_code=404, detail="Invalid username or password")
     col.update_one({"username": username}, {"$set": {"last_login_at": time.time()}})
     payload = {"username": username, "exp": time.time() + 3600}
-    token = jwt.encode(payload, "kb310", algorithm="HS256")
+    token = jwt.encode(payload, controller.jwt_secret, algorithm="HS256")
     return {"token": token}
 
 

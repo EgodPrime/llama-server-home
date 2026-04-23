@@ -2,3 +2,4 @@ mongodb_url: "mongodb://localhost:27017"
 mongodb_name: "lsh"
 node_dead_threshold: 60  # seconds
 nfs_path: "/path/to/nfs/mount/point"
+jwt_secret: "${JWT_SECRET}"  # Fallback if JWT_SECRET env var not set

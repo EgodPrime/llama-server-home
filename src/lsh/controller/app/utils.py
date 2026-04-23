@@ -30,7 +30,7 @@ async def get_current_user(request: Request) -> User:
         raise HTTPException(status_code=401, detail="Authorization token is missing")
     token = token.replace("Bearer ", "")
     try:
-        payload = jwt.decode(token, "kb310", algorithms=["HS256"])
+        payload = jwt.decode(token, controller.jwt_secret, algorithms=["HS256"])
         username = payload.get("username")
         if not username:
             raise HTTPException(status_code=401, detail="Invalid token: username missing")
