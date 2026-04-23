@@ -1,11 +1,20 @@
 import os
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from lsh.controller.lib import Controller
 
 router = APIRouter(prefix="/nfs", tags=["nfs"])
 controller = Controller()
+
+
+def _safe_resolve(base: str, user_path: str) -> str:
+    """Resolve a user-provided path and ensure it stays within the base directory."""
+    resolved = os.path.realpath(os.path.join(base, user_path))
+    base_resolved = os.path.realpath(base)
+    if not resolved.startswith(base_resolved + os.sep) and resolved != base_resolved:
+        raise HTTPException(status_code=403, detail="Access denied: path traversal detected")
+    return resolved
 
 
 def list_directory(dir_path: str):
@@ -27,7 +36,7 @@ async def list_nfs_root():
 
 @router.get("/list_dir/{dir_path}")
 async def list_nfs_dir(dir_path: str):
-    target_dir = os.path.join(controller.nfs_path, dir_path)
+    target_dir = _safe_resolve(controller.nfs_path, dir_path)
     if not os.path.exists(target_dir) or not os.path.isdir(target_dir):
         return {"error": "Directory not found"}
     return list_directory(target_dir)
