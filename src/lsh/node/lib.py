@@ -17,7 +17,12 @@ from lsh.utils.schema import Instance, InstanceTask, Metric, Node
 class NodeAgent:
     def __init__(self):
         cfg: dict[str, Any] = yaml.safe_load(open(NODE_CONFIG_PATH, "r"))
-        self.mongo_client = pymongo.MongoClient(cfg["mongodb_url"])
+        self.mongo_client = pymongo.MongoClient(
+            cfg["mongodb_url"],
+            serverSelectionTimeoutMS=5000,
+            socketTimeoutMS=10000,
+            connectTimeoutMS=5000,
+        )
         self.db = self.mongo_client[cfg["mongodb_name"]]
         self.heartbeat_interval = int(cfg.get("heartbeat_interval", 5))
         self.nfs_path = pathlib.Path(cfg.get("nfs_path")).resolve()

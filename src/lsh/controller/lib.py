@@ -13,7 +13,12 @@ from lsh.utils.schema import Node
 class Controller:
     def __init__(self):
         cfg = yaml.safe_load(open(CONTROLLER_CONFIG_PATH, "r"))
-        self.mongo_client = pymongo.MongoClient(cfg["mongodb_url"])
+        self.mongo_client = pymongo.MongoClient(
+            cfg["mongodb_url"],
+            serverSelectionTimeoutMS=5000,
+            socketTimeoutMS=10000,
+            connectTimeoutMS=5000,
+        )
         self.db = self.mongo_client[cfg["mongodb_name"]]
         self.node_dead_threshold = int(cfg.get("node_dead_threshold", 60))
         self.nfs_path = cfg.get("nfs_path")
