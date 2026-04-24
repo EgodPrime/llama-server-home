@@ -172,9 +172,22 @@ class NodeAgent:
             cmd_list += ["--mmproj", str(self.nfs_path / task.mmproj_path)]
         for k, v in task.config.items():
             cmd_list += [k, str(v)]
+
+        # Pipe stdout to log file via background thread (avoids leaked file handles)
+        def _pipe_stdout_to_log(proc):
+            try:
+                with open(log_file, "w") as f:
+                    for line in proc.stdout:
+                        f.write(line)
+                        f.flush()
+            except Exception as e:
+                logger.error(f"Log pipe error for {log_file}: {e}")
+
         process = subprocess.Popen(
-            cmd_list, env=task.env, stdout=open(log_file, "w"), stderr=subprocess.STDOUT, start_new_session=True
+            cmd_list, env=task.env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            start_new_session=True, text=True,
         )
+        threading.Thread(target=_pipe_stdout_to_log, args=(process,), daemon=True).start()
         col = self.db["instances"]
         created_time = time.time()
         instance = Instance(
@@ -228,9 +241,22 @@ class NodeAgent:
             cmd_list += ["--mmproj", str(self.nfs_path / instance.mmproj_path)]
         for k, v in instance.config.items():
             cmd_list += [k, str(v)]
+
+        # Pipe stdout to log file via background thread (avoids leaked file handles)
+        def _pipe_stdout_to_log(proc):
+            try:
+                with open(log_file, "w") as f:
+                    for line in proc.stdout:
+                        f.write(line)
+                        f.flush()
+            except Exception as e:
+                logger.error(f"Log pipe error for {log_file}: {e}")
+
         process = subprocess.Popen(
-            cmd_list, env=instance.env, stdout=open(log_file, "w"), stderr=subprocess.STDOUT, start_new_session=True
+            cmd_list, env=instance.env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            start_new_session=True, text=True,
         )
+        threading.Thread(target=_pipe_stdout_to_log, args=(process,), daemon=True).start()
         new_pid = process.pid
         col = self.db["instances"]
         col.update_one(
@@ -256,8 +282,10 @@ class NodeAgent:
     def handle_instance_task(self):
         col = self.db["instance_tasks"]
         while True:
-            task_doc = col.find_one(
+            # Atomic claim: only one agent can transition INIT → PROCESSING
+            task_doc = col.find_one_and_update(
                 {"node_id": self.node.node_id, "status": "INIT"},
+                {"$set": {"status": "PROCESSING", "started_at": time.time()}},
                 sort=[("created_at", pymongo.ASCENDING)],
             )
             if task_doc:
@@ -266,9 +294,6 @@ class NodeAgent:
                 result = None
                 try:
                     logger.info(f"Node {self.node.node_id} handling instance task: {task.task_id}")
-                    col.update_one(
-                        {"task_id": task.task_id}, {"$set": {"status": "PROCESSING", "started_at": time.time()}}
-                    )
                     # 根据任务类型执行相应操作
                     match task.type:
                         case "DEPLOY":
