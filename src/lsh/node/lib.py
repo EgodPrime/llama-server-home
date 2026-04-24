@@ -58,7 +58,8 @@ class NodeAgent:
 
     def update_metric(self):
         """
-        更新节点指标信息，插入一条新的记录，如果当前记录数超过20条，则删除最旧的一条
+        更新节点指标信息，插入一条新的记录。
+        使用 MongoDB capped collection 自动管理旧数据（最多200条/1MB）。
         """
         metric = Metric(
             node_id=self.node.node_id,
@@ -67,12 +68,7 @@ class NodeAgent:
             memory=measure_memory(),
             gpus=measure_gpu(),
         )
-        col = self.db["metrics"]
-        # 如果当前记录数超过20条，则删除最旧的一条
-        if col.count_documents({"node_id": self.node.node_id}) >= 20:
-            oldest_one = col.find_one({"node_id": self.node.node_id}, sort=[("timestamp", pymongo.ASCENDING)])
-            col.delete_one({"_id": oldest_one["_id"]})
-        col.insert_one(metric.model_dump())
+        self.db["metrics"].insert_one(metric.model_dump())
         logger.trace(f"Node {self.node.node_id} updated metrics")
 
     def self_maintenance(self):

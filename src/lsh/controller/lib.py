@@ -2,6 +2,7 @@ import os
 import time
 
 import pymongo
+import pymongo.errors
 import yaml
 from loguru import logger
 
@@ -26,6 +27,12 @@ class Controller:
         self.jwt_secret = os.environ.get("JWT_SECRET", cfg.get("jwt_secret"))
         if not self.jwt_secret:
             raise RuntimeError("JWT_SECRET environment variable or jwt_secret config is required")
+
+        # Ensure metrics collection is capped (auto-evicts oldest docs)
+        try:
+            self.db.command({"create": "metrics", "capped": True, "size": 1048576, "max": 200})
+        except pymongo.errors.OperationFailure:
+            pass  # collection already exists
 
     # --- 核心功能：节点自动发现与巡检 ---
     def node_discovery_and_check(self):
