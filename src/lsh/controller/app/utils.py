@@ -6,10 +6,8 @@ import bcrypt
 import jwt
 from fastapi import HTTPException, Request
 
-from lsh.controller.lib import Controller
+from lsh.controller.lib import get_controller
 from lsh.utils.schema import User
-
-controller = Controller()
 
 
 def hash_passwd(password: str) -> bytes:
@@ -30,7 +28,7 @@ async def get_current_user(request: Request) -> User:
         raise HTTPException(status_code=401, detail="Authorization token is missing")
     token = token.replace("Bearer ", "")
     try:
-        payload = jwt.decode(token, controller.jwt_secret, algorithms=["HS256"])
+        payload = jwt.decode(token, get_controller().jwt_secret, algorithms=["HS256"])
         username = payload.get("username")
         if not username:
             raise HTTPException(status_code=401, detail="Invalid token: username missing")
@@ -38,7 +36,7 @@ async def get_current_user(request: Request) -> User:
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
-    col = controller.db["users"]
+    col = get_controller().db["users"]
     user_doc = col.find_one({"username": username})
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
@@ -54,7 +52,8 @@ async def get_current_user_name(request: Request) -> str:
 @asynccontextmanager
 async def lifespan(app):
     print("[APP] 启动生命周期...")
-    th = threading.Thread(target=controller.node_discovery_and_check_loop, daemon=True)
+    ctrl = get_controller()
+    th = threading.Thread(target=ctrl.node_discovery_and_check_loop, daemon=True)
     th.start()
     print(f"[APP] 已启动线程，ID: {th.ident}")
     yield

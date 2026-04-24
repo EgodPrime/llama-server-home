@@ -4,13 +4,12 @@ import jwt
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from lsh.controller.lib import Controller
+from lsh.controller.lib import get_controller
 from lsh.utils.schema import User
 
 from .utils import hash_passwd, verify_passwd
 
 router = APIRouter(prefix="/user", tags=["user"])
-controller = Controller()
 
 
 class LoginRequest(BaseModel):
@@ -22,7 +21,7 @@ class LoginRequest(BaseModel):
 async def register_user(request: LoginRequest):
     username = request.username
     password = request.password
-    col = controller.db["users"]
+    col = get_controller().db["users"]
     if col.find_one({"username": username}):
         raise HTTPException(status_code=409, detail="Username already exists")
     password_hash = hash_passwd(password)
@@ -35,7 +34,7 @@ async def register_user(request: LoginRequest):
 async def login_user(request: LoginRequest):
     username = request.username
     password = request.password
-    col = controller.db["users"]
+    col = get_controller().db["users"]
     user_doc = col.find_one({"username": username})
     if not user_doc:
         raise HTTPException(status_code=404, detail="Invalid username or password")
@@ -44,7 +43,7 @@ async def login_user(request: LoginRequest):
         raise HTTPException(status_code=404, detail="Invalid username or password")
     col.update_one({"username": username}, {"$set": {"last_login_at": time.time()}})
     payload = {"username": username, "exp": time.time() + 3600}
-    token = jwt.encode(payload, controller.jwt_secret, algorithm="HS256")
+    token = jwt.encode(payload, get_controller().jwt_secret, algorithm="HS256")
     return {"token": token}
 
 
@@ -55,7 +54,7 @@ async def get_user_profile(request: Request):
         raise HTTPException(status_code=401, detail="Authorization token is missing")
     token = token.replace("Bearer ", "")
     try:
-        payload = jwt.decode(token, "kb310", algorithms=["HS256"])
+        payload = jwt.decode(token, get_controller().jwt_secret, algorithms=["HS256"])
         username = payload.get("username")
         if not username:
             raise HTTPException(status_code=401, detail="Invalid token: username missing")
@@ -63,7 +62,7 @@ async def get_user_profile(request: Request):
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
-    col = controller.db["users"]
+    col = get_controller().db["users"]
     user_doc = col.find_one({"username": username})
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")

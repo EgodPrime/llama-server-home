@@ -55,3 +55,19 @@ class Controller:
         col = self.db["nodes"]
         nodes = find_nodes_all(col)
         return nodes
+
+
+# Module-level singleton for Controller instances
+_controller_instance = None
+
+
+def get_controller() -> "Controller":
+    """Get or create the singleton Controller instance.
+
+    Ensures all router modules share a single MongoDB connection pool
+    and JWT secret configuration.
+    """
+    global _controller_instance
+    if _controller_instance is None:
+        _controller_instance = Controller()
+    return _controller_instance

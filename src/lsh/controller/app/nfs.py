@@ -2,10 +2,9 @@ import os
 
 from fastapi import APIRouter, HTTPException
 
-from lsh.controller.lib import Controller
+from lsh.controller.lib import get_controller
 
 router = APIRouter(prefix="/nfs", tags=["nfs"])
-controller = Controller()
 
 
 def _safe_resolve(base: str, user_path: str) -> str:
@@ -17,11 +16,11 @@ def _safe_resolve(base: str, user_path: str) -> str:
     return resolved
 
 
-def list_directory(dir_path: str):
+def list_directory(dir_path: str, base_path: str):
     res = []
     for item in os.listdir(dir_path):
         item_path = os.path.join(dir_path, item)
-        nfs_path = os.path.relpath(item_path, controller.nfs_path)
+        nfs_path = os.path.relpath(item_path, base_path)
         if os.path.isdir(item_path):
             res.append({"name": item, "type": "directory", "nfs_path": nfs_path})
         else:
@@ -31,26 +30,29 @@ def list_directory(dir_path: str):
 
 @router.get("/list_root")
 async def list_nfs_root():
-    return list_directory(controller.nfs_path)
+    base = get_controller().nfs_path
+    return list_directory(base, base)
 
 
 @router.get("/list_dir/{dir_path}")
 async def list_nfs_dir(dir_path: str):
-    target_dir = _safe_resolve(controller.nfs_path, dir_path)
+    base = get_controller().nfs_path
+    target_dir = _safe_resolve(base, dir_path)
     if not os.path.exists(target_dir) or not os.path.isdir(target_dir):
         return {"error": "Directory not found"}
-    return list_directory(target_dir)
+    return list_directory(target_dir, base)
 
 
 @router.get("/list_models")
 async def list_nfs_models():
-    root_items = list_directory(controller.nfs_path)
+    base = get_controller().nfs_path
+    root_items = list_directory(base, base)
     models = []
     for item in root_items:
         if item["type"] == "directory":
-            model_dir = os.path.join(controller.nfs_path, item["name"])
+            model_dir = os.path.join(base, item["name"])
             model_name = item["name"]
-            model_files = list_directory(model_dir)
+            model_files = list_directory(model_dir, base)
             model_info = {"model_name": model_name, "model_file": None, "mmproj_file": None}
             for f in model_files:
                 if f["type"] == "file" and f["name"].endswith(".gguf"):
