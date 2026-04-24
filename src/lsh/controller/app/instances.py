@@ -15,14 +15,14 @@ async def list_instances(username=Depends(get_current_user_name)):
     return [Instance.model_validate(instance).model_dump() for instance in instances]
 
 
-@router.post("/delete_instance/{node_id}/{instance_name}")
+@router.delete("/delete_instance/{node_id}/{instance_name}")
 async def delete_instance(node_id: str, instance_name: str):
     col = get_controller().db["instances"]
     result = col.delete_one({"node_id": node_id, "instance_name": instance_name})
     if result.deleted_count == 1:
         return {"message": f"Instance {instance_name}@{node_id} deleted"}
     else:
-        return {"error": "Instance not found"}
+        raise HTTPException(status_code=404, detail="Instance not found")
 
 
 @router.get("/logs/{node_id}/{instance_name}")

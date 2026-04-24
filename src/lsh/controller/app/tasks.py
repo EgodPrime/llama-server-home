@@ -21,14 +21,14 @@ async def create_instance(task: InstanceTask):
     return {"message": f"Instance task for {task.instance_name}@{task.node_id} created"}
 
 
-@router.post("/delete_instance_task/{task_id}")
+@router.delete("/delete_instance_task/{task_id}")
 async def delete_instance_task(task_id: str):
     col = get_controller().db["instance_tasks"]
     result = col.delete_one({"task_id": task_id})
     if result.deleted_count == 1:
         return {"message": f"Task {task_id} deleted"}
     else:
-        return {"error": "Task not found"}
+        raise HTTPException(status_code=404, detail="Task not found")
 
 
 @router.post("/stop_instance/{node_id}/{instance_name}")

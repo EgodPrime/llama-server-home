@@ -64,7 +64,7 @@ export async function createInstance(task: InstanceTask): Promise<{ message: str
 
 // 删除实例任务
 export async function deleteInstanceTask(taskId: string): Promise<{ message: string }> {
-  const res = await axios.post(`/api/tasks/delete_instance_task/${taskId}`);
+  const res = await axios.delete(`/api/tasks/delete_instance_task/${taskId}`);
   return res.data;
 }
 
@@ -79,7 +79,7 @@ export async function deleteInstance(
   nodeId: string,
   instanceName: string
 ): Promise<{ message: string }> {
-  const res = await axios.post(`/api/instances/delete_instance/${nodeId}/${instanceName}`);
+  const res = await axios.delete(`/api/instances/delete_instance/${nodeId}/${instanceName}`);
   return res.data;
 }
 
