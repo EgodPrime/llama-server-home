@@ -56,7 +56,7 @@ class NodeAgent:
         col.update_one({"node_id": self.node.node_id}, {"$set": {"last_heartbeat": time.time(), "status": "ONLINE"}})
         logger.trace(f"Node {self.node.node_id} sent heartbeat.")
 
-    def updaate_metric(self):
+    def update_metric(self):
         """
         更新节点指标信息，插入一条新的记录，如果当前记录数超过20条，则删除最旧的一条
         """
@@ -82,7 +82,7 @@ class NodeAgent:
         while True:
             t0 = time.time()
             self.heartbeat()
-            self.updaate_metric()
+            self.update_metric()
             elapsed = time.time() - t0
             time.sleep(max(0, self.heartbeat_interval - elapsed))
 

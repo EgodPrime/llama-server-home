@@ -135,7 +135,7 @@ class Metric(BaseModel):
 
 class User(BaseModel):
     username: str
-    password_hash: bytes  # 存储密码的哈希值，实际应用中应使用安全的哈希算法
+    password_hash: bytes  # bcrypt hash of the user's password
     role: str = "user"  # user | admin
     created_at: Optional[float] = Field(default_factory=time.time)
     last_login_at: Optional[float] = None
