@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from lsh.controller.lib import get_controller
 from lsh.utils.schema import InstanceTask

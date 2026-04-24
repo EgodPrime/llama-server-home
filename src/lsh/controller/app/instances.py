@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from lsh.controller.lib import get_controller
 from lsh.utils.schema import Instance, Log
