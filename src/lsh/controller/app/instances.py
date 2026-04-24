@@ -17,10 +17,14 @@ async def list_instances(username=Depends(get_current_user_name)):
 
 @router.delete("/delete_instance/{node_id}/{instance_name}")
 async def delete_instance(node_id: str, instance_name: str):
-    col = get_controller().db["instances"]
-    result = col.delete_one({"node_id": node_id, "instance_name": instance_name})
+    ctrl = get_controller()
+    col_instances = ctrl.db["instances"]
+    result = col_instances.delete_one({"node_id": node_id, "instance_name": instance_name})
     if result.deleted_count == 1:
-        return {"message": f"Instance {instance_name}@{node_id} deleted"}
+        # Cascade delete: clean up associated logs and tasks
+        ctrl.db["logs"].delete_many({"node_id": node_id, "instance_name": instance_name})
+        ctrl.db["instance_tasks"].delete_many({"node_id": node_id, "instance_name": instance_name})
+        return {"message": f"Instance {instance_name}@{node_id} and associated data deleted"}
     else:
         raise HTTPException(status_code=404, detail="Instance not found")
 
