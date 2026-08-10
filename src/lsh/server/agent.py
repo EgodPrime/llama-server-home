@@ -26,8 +26,8 @@ class Agent:
         host: str = "127.0.0.1",
     ):
         self.db = db
-        self.llama_path = pathlib.Path(llama_path).resolve()
-        self.storage_dir = pathlib.Path(storage_dir).resolve()
+        self.llama_path = Path(llama_path).resolve()
+        self.storage_dir = Path(storage_dir).resolve()
         self.maintenance_interval = maintenance_interval
         self.metrics_interval = metrics_interval
         self.max_metrics = max_metrics
