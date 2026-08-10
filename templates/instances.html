@@ -77,7 +77,10 @@
        x-cloak @click.self="showLogModal = false">
     <div class="bg-white rounded-lg p-4 w-full max-w-2xl max-h-[80vh] flex flex-col">
       <div class="flex justify-between items-center mb-2">
-        <h3 class="font-bold">Logs: <span x-text="logInstanceName"></span></h3>
+        <div class="flex items-center gap-2">
+          <h3 class="font-bold">Logs: <span x-text="logInstanceName"></span></h3>
+          <button @click="refreshLogs()" title="Refresh logs" class="text-gray-500 hover:text-gray-700 text-lg">⟳</button>
+        </div>
         <button @click="showLogModal = false" class="text-gray-500 hover:text-gray-700">&times;</button>
       </div>
       <pre class="bg-gray-900 text-green-400 text-xs p-3 rounded flex-1 overflow-auto whitespace-pre-wrap"
@@ -131,8 +134,12 @@ function instancesPage() {
     async showLogs(name) {
       this.logInstanceName = name
       this.showLogModal = true
+      await this.refreshLogs()
+    },
+    async refreshLogs() {
+      if (!this.logInstanceName) return
       try {
-        const res = await fetch(`/api/instances/${name}/logs`)
+        const res = await fetch(`/api/instances/${this.logInstanceName}/logs`)
         const data = await res.json()
         this.logContent = data.content || ''
       } catch (e) { this.logContent = 'Error loading logs' }
