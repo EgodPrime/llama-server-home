@@ -278,6 +278,7 @@ For full help, run: llama-server --help`,
           body: JSON.stringify({
             instance_name: this.instanceName,
             type: 'DEPLOY',
+            host: this.form.host,
             port: this.form.port,
             env: this.getEnv(),
             cmd_args: this.buildCmdArgs(),

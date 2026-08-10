@@ -112,6 +112,7 @@ async def list_tasks(db: Database = Depends(get_db)):
 class CreateTaskRequest(BaseModel):
     instance_name: str
     type: str = "DEPLOY"
+    host: Optional[str] = "0.0.0.0"
     port: Optional[int] = None
     env: Optional[Dict[str, str]] = None
     cmd_args: Optional[str] = None
@@ -124,6 +125,7 @@ async def create_task(request: CreateTaskRequest, db: Database = Depends(get_db)
         "task_id": task_id,
         "type": request.type,
         "instance_name": request.instance_name,
+        "host": request.host,
         "port": request.port,
         "status": "INIT",
         "env": request.env,

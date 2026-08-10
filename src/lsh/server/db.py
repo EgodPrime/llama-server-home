@@ -63,6 +63,7 @@ class Database:
                 task_id TEXT PRIMARY KEY,
                 type TEXT,
                 instance_name TEXT,
+                host TEXT,
                 port INTEGER,
                 status TEXT,
                 error_msg TEXT,
@@ -106,6 +107,10 @@ class Database:
             pass
         try:
             cur.execute("ALTER TABLE instances ADD COLUMN host TEXT")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cur.execute("ALTER TABLE instance_tasks ADD COLUMN host TEXT")
         except sqlite3.OperationalError:
             pass
         try:
@@ -211,12 +216,13 @@ class Database:
     def create_instance_task(self, task: Dict[str, Any]):
         self._exec_commit(
             """INSERT INTO instance_tasks
-            (task_id, type, instance_name, port, status, env, cmd_args, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (task_id, type, instance_name, host, port, status, env, cmd_args, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 task.get("task_id", str(__import__("uuid").uuid4())),
                 task.get("type"),
                 task.get("instance_name"),
+                task.get("host", "0.0.0.0"),
                 task.get("port"),
                 task.get("status", "INIT"),
                 json.dumps(task.get("env")) if task.get("env") else None,

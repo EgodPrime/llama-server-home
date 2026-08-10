@@ -187,7 +187,7 @@ class Agent:
             "instance_name": task.instance_name,
             "status": "RUNNING",
             "pid": process.pid,
-            "host": self.host,
+            "host": task.host,
             "port": task.port,
             "env": task.env,
             "cmd_args": task.cmd_args,

@@ -28,6 +28,7 @@ class InstanceTask(BaseModel):
     task_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     type: str
     instance_name: str
+    host: Optional[str] = "0.0.0.0"
     port: Optional[int] = None
     status: Optional[str] = None
     error_msg: Optional[str] = None
