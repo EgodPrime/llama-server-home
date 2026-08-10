@@ -158,7 +158,7 @@ llama-server-home/
 │   │   └── utils/
 │   │       ├── schema.py     # Pydantic models
 │   │       └── path_helper.py
-│   └── logs/                 # Instance logs (auto-created)
+├── logs/                     # Instance logs (auto-created)
 ├── templates/                # Jinja2 HTML templates
 │   ├── base.html
 │   ├── home.html
