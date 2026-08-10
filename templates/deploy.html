@@ -28,6 +28,35 @@
       </select>
     </div>
 
+    <!-- File Selection (shown after model selected) -->
+    <div class="mb-4" x-show="form.selectedModel" x-cloak>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Model File (.gguf)</label>
+      <select x-model="form.model_path" @change="onModelFileChange"
+              class="w-full border rounded px-3 py-2 text-sm font-mono">
+        <option value="">Select a model file...</option>
+        <template x-for="f in modelFiles" :key="f.path">
+          <option :value="f.path" x-text="f.name"></option>
+        </template>
+      </select>
+    </div>
+
+    <!-- mmproj Selection -->
+    <div class="mb-4" x-show="form.selectedModel && mmprojFiles.length > 0" x-cloak>
+      <label class="inline-flex items-center gap-2 mb-2 cursor-pointer">
+        <input type="checkbox" x-model="useMmproj" class="rounded">
+        <span class="text-sm font-medium text-gray-700">Use multimodal projector (mmproj)</span>
+      </label>
+      <div x-show="useMmproj" x-cloak>
+        <select x-model="form.mmproj_path"
+                class="w-full border rounded px-3 py-2 text-sm font-mono">
+          <option value="">Select an mmproj file...</option>
+          <template x-for="f in mmprojFiles" :key="f.path">
+            <option :value="f.path" x-text="f.name"></option>
+          </template>
+        </select>
+      </div>
+    </div>
+
     <!-- GPU Selection -->
     <div class="mb-4" x-show="gpus.length > 0">
       <label class="block text-sm font-medium text-gray-700 mb-1">GPU (sets CUDA_VISIBLE_DEVICES)</label>
@@ -104,6 +133,9 @@
 function deployPage() {
   return {
     models: [],
+    modelFiles: [],
+    mmprojFiles: [],
+    useMmproj: false,
     gpus: [],
     loading: false,
     selectedGpus: [],
@@ -182,11 +214,26 @@ For full help, run: llama-server --help`,
       } catch (e) { console.error(e) }
     },
     onModelChange(name) {
-      const m = this.models.find(x => x.model_name === name)
-      if (m) {
-        this.form.model_path = m.model_file || ''
-        this.form.mmproj_path = m.mmproj_file || ''
+      this.form.model_path = ''
+      this.form.mmproj_path = ''
+      this.useMmproj = false
+      this.modelFiles = []
+      this.mmprojFiles = []
+      if (!name) return
+      this.fetchModelFiles(name)
+    },
+    onModelFileChange() {
+      if (!this.form.model_path) {
+        this.form.mmproj_path = ''
       }
+    },
+    async fetchModelFiles(modelName) {
+      try {
+        const items = await fetch('/api/storage/list_dir/' + encodeURIComponent(modelName)).then(r => r.json())
+        const ggufs = items.filter(i => i.type === 'file' && i.name.endsWith('.gguf'))
+        this.modelFiles = ggufs.filter(f => !f.name.startsWith('mmproj'))
+        this.mmprojFiles = ggufs.filter(f => f.name.startsWith('mmproj'))
+      } catch (e) { console.error(e) }
     },
     getEnv() {
       const env = {}
