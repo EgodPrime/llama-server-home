@@ -244,8 +244,8 @@ For full help, run: llama-server --help`,
       return Object.keys(env).length > 0 ? env : null
     },
     async submit() {
-      if (!this.form.instance_name) { alert('Instance name required'); return }
-      if (!this.form.model_path) { alert('Model required'); return }
+      if (!this.instanceName || this.instanceName === 'untitled_cpu_8080') { alert('Select a model first'); return }
+      if (!this.form.model_path) { alert('Select a model file'); return }
       this.loading = true
       try {
         const res = await fetch('/api/tasks/create', {
