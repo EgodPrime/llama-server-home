@@ -79,10 +79,4 @@ class Metric(BaseModel):
     gpus: List[GPUInfo]
 
 
-class Profile(BaseModel):
-    profile_name: str
-    instances: List[Instance]
-    created_at: Optional[float] = Field(default_factory=time.time)
-
-
-__all__ = ["Instance", "InstanceTask", "Log", "Metric", "CPUInfo", "MemoryInfo", "GPUInfo", "Profile"]
+__all__ = ["Instance", "InstanceTask", "Log", "Metric", "CPUInfo", "MemoryInfo", "GPUInfo"]

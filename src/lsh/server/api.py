@@ -37,11 +37,6 @@ def format_task(doc: Dict[str, Any]) -> Dict[str, Any]:
     return doc
 
 
-def format_profile(doc: Dict[str, Any]) -> Dict[str, Any]:
-    doc = doc.copy()
-    doc["instances"] = parse_json_field(doc.get("instances")) or []
-    return doc
-
 
 def parse_gpus(gpus_info: str | None) -> List[Dict[str, Any]]:
     if not gpus_info:
@@ -273,63 +268,3 @@ async def list_metrics(n: int = Query(default=20, ge=1, le=500), db: Database = 
         m.pop("gpus_info", None)
     return metrics
 
-
-# --- Profiles ---
-
-
-class CreateProfileRequest(BaseModel):
-    profile_name: str
-    instances: List[Dict[str, Any]]
-
-
-@api_router.get("/api/profiles/list")
-async def list_profiles(db: Database = Depends(get_db)):
-    return [format_profile(g) for g in db.list_profiles()]
-
-
-@api_router.get("/api/profiles/{name}")
-async def get_profile(name: str, db: Database = Depends(get_db)):
-    prof = db.get_profile(name)
-    if not prof:
-        raise HTTPException(status_code=404, detail="Profile not found")
-    return format_profile(prof)
-
-
-@api_router.post("/api/profiles/create")
-async def create_profile(request: CreateProfileRequest, db: Database = Depends(get_db)):
-    if db.get_profile(request.profile_name):
-        raise HTTPException(status_code=409, detail="Profile already exists")
-    db.create_profile(request.profile_name, request.instances)
-    return {"message": f"Profile {request.profile_name} created"}
-
-
-@api_router.delete("/api/profiles/{name}")
-async def delete_profile(name: str, db: Database = Depends(get_db)):
-    if not db.get_profile(name):
-        raise HTTPException(status_code=404, detail="Profile not found")
-    db.delete_profile(name)
-    return {"message": f"Profile {name} deleted"}
-
-
-@api_router.post("/api/profiles/{name}/deploy")
-async def deploy_profile(name: str, db: Database = Depends(get_db)):
-    prof = db.get_profile(name)
-    if not prof:
-        raise HTTPException(status_code=404, detail="Profile not found")
-    instances = prof["instances"] if isinstance(prof["instances"], list) else json.loads(prof["instances"])
-    task_ids = []
-    for inst in instances:
-        task_id = str(uuid.uuid4())
-        db.create_instance_task({
-            "task_id": task_id,
-            "type": "DEPLOY",
-            "instance_name": inst.get("instance_name"),
-            "port": inst.get("port"),
-            "model_path": inst.get("model_path"),
-            "mmproj_path": inst.get("mmproj_path"),
-            "status": "INIT",
-            "env": inst.get("env"),
-            "config": inst.get("config"),
-        })
-        task_ids.append(task_id)
-    return {"message": f"Deploy tasks created for profile {name}", "task_ids": task_ids}

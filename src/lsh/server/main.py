@@ -82,9 +82,6 @@ def create_app() -> FastAPI:
         async def storage(request: Request):
             return templates.TemplateResponse("storage.html", {"request": request})
 
-        @app.get("/profiles", response_class=HTMLResponse)
-        async def profiles(request: Request):
-            return templates.TemplateResponse("profiles.html", {"request": request})
 
         @app.get("/metrics", response_class=HTMLResponse)
         async def metrics(request: Request):

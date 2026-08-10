@@ -100,14 +100,6 @@ class Database:
             )
         """)
 
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS profiles (
-                profile_name TEXT PRIMARY KEY,
-                instances TEXT,
-                created_at REAL
-            )
-        """)
-
         self._migrate_schema()
         self.conn.commit()
         logger.info("Database schema initialized")
@@ -121,6 +113,10 @@ class Database:
             pass
         try:
             cur.execute("ALTER TABLE instance_tasks ADD COLUMN cmd_args TEXT")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cur.execute("DROP TABLE IF EXISTS profiles")
         except sqlite3.OperationalError:
             pass
 
@@ -304,26 +300,6 @@ class Database:
             )""",
             (max_rows,),
         )
-
-    # --- Profiles ---
-
-    def list_profiles(self) -> List[Dict[str, Any]]:
-        rows = self._exec("SELECT * FROM profiles ORDER BY created_at DESC").fetchall()
-        return [self._row_to_dict(r) for r in rows]
-
-    def get_profile(self, profile_name: str) -> Optional[Dict[str, Any]]:
-        row = self._exec("SELECT * FROM profiles WHERE profile_name = ?", (profile_name,)).fetchone()
-        return self._row_to_dict(row) if row else None
-
-    def create_profile(self, profile_name: str, instances: List):
-        self._exec_commit(
-            """INSERT INTO profiles (profile_name, instances, created_at)
-            VALUES (?, ?, ?)""",
-            (profile_name, json.dumps(instances), time.time()),
-        )
-
-    def delete_profile(self, profile_name: str):
-        self._exec_commit("DELETE FROM profiles WHERE profile_name = ?", (profile_name,))
 
     def close(self):
         self.conn.close()
