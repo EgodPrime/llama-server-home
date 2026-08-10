@@ -214,6 +214,7 @@ For full help, run: llama-server --help`,
       } catch (e) { console.error(e) }
     },
     onModelChange(name) {
+      this.form.selectedModel = name
       this.form.model_path = ''
       this.form.mmproj_path = ''
       this.useMmproj = false
