@@ -15,3 +15,6 @@ db_dir
 controller.yaml
 node.yaml
 frontend/node_modules/
+
+# instance logs
+logs/
