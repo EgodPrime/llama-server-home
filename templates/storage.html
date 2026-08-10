@@ -31,7 +31,7 @@
           <tr class="border-t">
             <td class="px-4 py-2">
               <a x-show="item.type === 'directory'"
-                 @click="openDir(item.path)"
+                 @click="showDirModal(item.path, item.name)"
                  class="text-blue-600 hover:underline cursor-pointer"
                  x-text="item.name"></a>
               <span x-show="item.type === 'file'" x-text="item.name"></span>
@@ -46,6 +46,50 @@
       </tbody>
     </table>
   </div>
+
+  <!-- Directory Contents Modal -->
+  <div x-show="showModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+       x-cloak @click.self="closeModal()">
+    <div class="bg-white rounded-lg p-4 w-full max-w-3xl max-h-[80vh] flex flex-col">
+      <div class="flex justify-between items-center mb-2">
+        <div>
+          <h3 class="font-bold" x-text="modalTitle"></h3>
+          <p class="text-xs text-gray-500 font-mono" x-text="modalPath"></p>
+        </div>
+        <button @click="closeModal()" class="text-gray-500 hover:text-gray-700 text-xl">&times;</button>
+      </div>
+      <div class="flex-1 overflow-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-4 py-2 text-left">Name</th>
+              <th class="px-4 py-2 text-left">Type</th>
+              <th class="px-4 py-2 text-left">Path</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="item in modalItems" :key="item.path">
+              <tr class="border-t"
+                  :class="item.type === 'directory' ? 'cursor-pointer hover:bg-gray-50' : ''"
+                  @click="item.type === 'directory' && showDirModal(item.path, item.name)">
+                <td class="px-4 py-2">
+                  <span x-show="item.type === 'directory'"
+                        class="text-blue-600 hover:underline"
+                        x-text="item.name"></span>
+                  <span x-show="item.type === 'file'" x-text="item.name"></span>
+                </td>
+                <td class="px-4 py-2" x-text="item.type"></td>
+                <td class="px-4 py-2 font-mono text-xs" x-text="item.path"></td>
+              </tr>
+            </template>
+            <tr x-show="modalItems.length === 0">
+              <td colspan="3" class="px-4 py-4 text-gray-500 text-center">Empty</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
@@ -55,17 +99,51 @@ function storagePage() {
   return {
     items: [],
     currentPath: '',
+    showModal: false,
+    modalTitle: '',
+    modalPath: '',
+    modalItems: [],
+    modalStack: [],
     init() { this.fetchData() },
     get pathParts() { return this.currentPath.split('/').filter(Boolean) },
-    openDir(path) { this.currentPath = path },
-    navigate(path) { this.currentPath = path },
+    navigate(path) { this.currentPath = path; this.fetchData() },
+    showDirModal(path, name) {
+      this.modalStack.push({ path: this.currentPath, items: this.items })
+      this.currentPath = path
+      this.modalTitle = name
+      this.modalPath = path
+      this.showModal = true
+      this.fetchData()
+    },
+    closeModal() {
+      if (this.modalStack.length > 0) {
+        const prev = this.modalStack.pop()
+        this.currentPath = prev.path
+        this.items = prev.items
+      } else {
+        this.currentPath = ''
+        this.fetchData()
+      }
+      this.showModal = false
+      this.modalTitle = ''
+      this.modalPath = ''
+      this.modalItems = []
+    },
     async fetchData() {
       try {
         const url = this.currentPath
           ? `/api/storage/list_dir/${this.currentPath}`
           : '/api/storage/list_root'
-        this.items = await fetch(url).then(r => r.json())
-      } catch (e) { this.items = [] }
+        const data = await fetch(url).then(r => r.json())
+        if (this.showModal) {
+          this.modalItems = data
+        } else {
+          this.items = data
+        }
+      } catch (e) {
+        this.items = []
+        this.modalItems = []
+      }
     }
   }
 }

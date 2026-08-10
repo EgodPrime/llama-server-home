@@ -166,9 +166,11 @@ def _safe_resolve(base: str, user_path: str) -> str:
     return resolved
 
 
-def _list_directory(dir_path: str, base_path: str) -> List[Dict[str, Any]]:
+def _list_directory(dir_path: str, base_path: str, hidden_ok: bool = False) -> List[Dict[str, Any]]:
     result = []
     for item in os.listdir(dir_path):
+        if not hidden_ok and item.startswith("."):
+            continue
         item_path = os.path.join(dir_path, item)
         rel_path = os.path.relpath(item_path, base_path)
         if os.path.isdir(item_path):
@@ -183,7 +185,7 @@ async def list_storage_root(db: Database = Depends(get_db)):
     storage_dir = load_config()["storage_dir"]
     if not os.path.exists(storage_dir):
         return []
-    return _list_directory(storage_dir, storage_dir)
+    return _list_directory(storage_dir, storage_dir, hidden_ok=False)
 
 
 @api_router.get("/api/storage/list_dir/{dir_path:path}")
