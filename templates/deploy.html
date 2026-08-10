@@ -178,6 +178,8 @@ function deployPage() {
     },
     helpText: `Commonly used llama-server arguments:
 
+-m, --model FNAME                model path (handled by this tool)
+-mm, --mmproj FNAME              path to a multimodal projector file.
 -c, --ctx-size N                 prompt context size (default: from model)
 -n, --predict N                  number of tokens to predict (default: -1=infinity)
 -t, --threads N                  CPU threads for generation (default: -1=auto)
@@ -188,14 +190,12 @@ function deployPage() {
 -ncmoe, --n-cpu-moe N            keep first N MoE layers on CPU
 -cmoe, --cpu-moe                 keep all MoE layers on CPU
 -np, --parallel N                server slots (default: -1=auto)
---host HOST                      listen address (default: 127.0.0.1)
---port PORT                      listen port (default: 8080)
 --temp N                         temperature (default: 0.80)
 --top-k N                        top-k sampling (default: 40)
 --top-p N                        top-p sampling (default: 0.95)
--m, --model FNAME                model path (handled by this tool)
--mm, --mmproj FNAME              path to a multimodal projector file.
---lora FNAME                     LoRA adapter path
+--reasoning on/off               whether thought tags are allowed and/or extracted
+--jinja, --no-jinja              whether to use jinja template engine for chat (default: enabled)
+-kvu, -no-kvu
 
 For full help, run: llama-server --help`,
     llamaPath: '/home/egod/Projects/llama.cpp/build/bin/llama-server',
