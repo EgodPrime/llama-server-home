@@ -3,7 +3,7 @@ import os
 import uuid
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from lsh.server.db import Database, get_db, load_config
@@ -74,6 +74,48 @@ async def get_instance_logs(name: str, db: Database = Depends(get_db)):
     if not log:
         return {"instance_name": name, "content": ""}
     return log
+
+
+@api_router.get("/api/instances/{name}/cmd")
+async def get_instance_cmd(name: str, request: Request, db: Database = Depends(get_db)):
+    from pathlib import Path
+    import shlex
+
+    inst = db.get_instance(name)
+    if not inst:
+        raise HTTPException(status_code=404, detail="Instance not found")
+
+    agent = request.app.state.agent
+    cfg = load_config()
+
+    model_path = inst.get("model_path")
+    mmproj_path = inst.get("mmproj_path")
+    port = inst.get("port")
+    config = parse_json_field(inst.get("config")) or {}
+    cmd_args_raw = inst.get("cmd_args")
+
+    if not model_path or not port:
+        raise HTTPException(status_code=400, detail="Instance missing model_path or port")
+
+    log_dir = Path(__file__).resolve().parents[2] / "logs"
+    log_file = log_dir / f"{name}.log"
+    host = cfg.get("host", "127.0.0.1")
+
+    cmd = [
+        str(agent.llama_path),
+        "--model", str(agent.storage_dir / model_path),
+        "--host", host,
+        "--port", str(port),
+        "--log-file", str(log_file),
+    ]
+    if mmproj_path:
+        cmd += ["--mmproj", str(agent.storage_dir / mmproj_path)]
+    for k, v in config.items():
+        cmd += [k, str(v)]
+    if cmd_args_raw:
+        cmd += shlex.split(cmd_args_raw)
+
+    return {"cmd": cmd}
 
 
 @api_router.delete("/api/instances/{name}")

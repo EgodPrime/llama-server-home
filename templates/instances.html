@@ -41,8 +41,10 @@
               <button x-show="inst.status === 'STOPPED' || inst.status === 'ERROR'"
                       @click="resume(inst.instance_name)"
                       class="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600">Resume</button>
+              <button @click="showCmd(inst.instance_name)"
+                       class="text-xs bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600">Cmd</button>
               <button @click="showLogs(inst.instance_name)"
-                      class="text-xs bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600">Logs</button>
+                       class="text-xs bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600">Logs</button>
               <button @click="deleteInst(inst.instance_name)"
                       class="text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">Delete</button>
             </td>
@@ -53,6 +55,21 @@
         </tr>
       </tbody>
     </table>
+  </div>
+
+  <!-- Cmd Modal -->
+  <div x-show="showCmdModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+       x-cloak @click.self="showCmdModal = false">
+    <div class="bg-white rounded-lg p-4 w-full max-w-3xl max-h-[80vh] flex flex-col">
+      <div class="flex justify-between items-center mb-2">
+        <h3 class="font-bold">Deploy Command: <span x-text="cmdInstanceName"></span></h3>
+        <button @click="showCmdModal = false" class="text-gray-500 hover:text-gray-700">&times;</button>
+      </div>
+      <div class="flex-1 overflow-auto">
+        <pre class="bg-gray-900 text-green-400 text-xs p-3 rounded whitespace-pre-wrap break-all"
+             x-text="cmdContent"></pre>
+      </div>
+    </div>
   </div>
 
   <!-- Logs Modal -->
@@ -75,6 +92,9 @@
 function instancesPage() {
   return {
     instances: [],
+    showCmdModal: false,
+    cmdInstanceName: '',
+    cmdContent: '',
     showLogModal: false,
     logInstanceName: '',
     logContent: '',
@@ -98,6 +118,15 @@ function instancesPage() {
     async deleteInst(name) {
       if (!confirm(`Delete ${name}?`)) return
       try { await fetch(`/api/instances/${name}`, { method: 'DELETE' }) } catch (e) { alert(e.message) }
+    },
+    async showCmd(name) {
+      this.cmdInstanceName = name
+      this.showCmdModal = true
+      try {
+        const res = await fetch(`/api/instances/${name}/cmd`)
+        const data = await res.json()
+        this.cmdContent = data.cmd ? data.cmd.join(' ') : ''
+      } catch (e) { this.cmdContent = 'Error loading command' }
     },
     async showLogs(name) {
       this.logInstanceName = name
