@@ -1,9 +1,12 @@
-from typing import List
-
 import psutil
-import pynvml
 
 from lsh.utils.schema import CPUInfo, GPUInfo, MemoryInfo
+
+try:
+    import pynvml
+    HAS_NVML = True
+except ImportError:
+    HAS_NVML = False
 
 
 def measure_cpu() -> CPUInfo:
@@ -22,7 +25,9 @@ def measure_memory() -> MemoryInfo:
     )
 
 
-def measure_gpu() -> List[GPUInfo]:
+def measure_gpu() -> list[GPUInfo]:
+    if not HAS_NVML:
+        return []
     gpus = []
     try:
         pynvml.nvmlInit()
@@ -33,7 +38,7 @@ def measure_gpu() -> List[GPUInfo]:
             mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
             gpu_info = GPUInfo(
                 id=i,
-                model=pynvml.nvmlDeviceGetName(handle),
+                model=pynvml.nvmlDeviceGetName(handle).decode() if isinstance(pynvml.nvmlDeviceGetName(handle), bytes) else pynvml.nvmlDeviceGetName(handle),
                 temperature_c=pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU),
                 power_draw_w=pynvml.nvmlDeviceGetPowerUsage(handle) / 1000,
                 memory_total_mb=mem_info.total / (1024 * 1024),
@@ -41,11 +46,11 @@ def measure_gpu() -> List[GPUInfo]:
                 memory_free_mb=mem_info.free / (1024 * 1024),
             )
             gpus.append(gpu_info)
-    except pynvml.NVMLError:
+    except Exception:
         pass
     finally:
         try:
             pynvml.nvmlShutdown()
-        except pynvml.NVMLError:
+        except Exception:
             pass
     return gpus

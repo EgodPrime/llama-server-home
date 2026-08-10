@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Metrics - llama-server-home{% endblock %}
+{% block content %}
+<div x-data="metricsPage()" x-init="init()" class="max-w-6xl mx-auto">
+  <h1 class="text-2xl font-bold mb-6">System Metrics</h1>
+
+  <!-- Latest stats -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <div class="bg-white p-4 rounded-lg shadow">
+      <div class="text-gray-500 text-sm mb-2">CPU Usage</div>
+      <div class="text-3xl font-bold" x-text="(latest?.cpu_usage || 0).toFixed(1) + '%'"></div>
+      <div class="text-xs text-gray-400" x-text="latest?.cpu_cores + ' cores'"></div>
+    </div>
+    <div class="bg-white p-4 rounded-lg shadow">
+      <div class="text-gray-500 text-sm mb-2">Memory</div>
+      <div class="text-3xl font-bold" x-text="(latest?.mem_usage_pct || 0).toFixed(1) + '%'"></div>
+      <div class="text-xs text-gray-400"
+           x-text="((latest?.mem_used_mb || 0) / 1024).toFixed(1) + ' / ' + ((latest?.mem_total_mb || 0) / 1024).toFixed(1) + ' GB'"></div>
+    </div>
+    <div class="bg-white p-4 rounded-lg shadow">
+      <div class="text-gray-500 text-sm mb-2">GPU</div>
+      <div x-show="!latest?.gpus?.length" class="text-sm text-gray-400">No GPU</div>
+      <template x-for="gpu in latest?.gpus || []" :key="gpu.id">
+        <div class="text-sm">
+          <div class="font-medium" x-text="'GPU ' + gpu.id + ': ' + gpu.model"></div>
+          <div class="text-xs text-gray-500"
+               x-text="((gpu.memory_used_mb || 0) / 1024).toFixed(1) + ' / ' + ((gpu.memory_total_mb || 0) / 1024).toFixed(1) + ' GB | ' + gpu.temperature_c + '°C'"></div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- CPU History -->
+  <div class="bg-white rounded-lg shadow p-4 mb-6">
+    <h3 class="font-semibold mb-3">CPU Usage History</h3>
+    <canvas id="cpuChart" height="200"></canvas>
+  </div>
+
+  <!-- Memory History -->
+  <div class="bg-white rounded-lg shadow p-4 mb-6">
+    <h3 class="font-semibold mb-3">Memory Usage History</h3>
+    <canvas id="memChart" height="200"></canvas>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function metricsPage() {
+  return {
+    metrics: [],
+    latest: null,
+    cpuCtx: null,
+    memCtx: null,
+    init() {
+      this.cpuCtx = document.getElementById('cpuChart')?.getContext('2d')
+      this.memCtx = document.getElementById('memChart')?.getContext('2d')
+      this.fetchData()
+      setInterval(() => this.fetchData(), 5000)
+    },
+    async fetchData() {
+      try {
+        this.metrics = await fetch('/api/metrics?n=30').then(r => r.json()).then(m => m.reverse())
+        if (this.metrics.length > 0) this.latest = this.metrics[this.metrics.length - 1]
+        this.drawCharts()
+      } catch (e) { console.error(e) }
+    },
+    drawLine(ctx, data, key, color) {
+      if (!ctx || data.length < 2) return
+      const w = ctx.canvas.width = ctx.canvas.offsetWidth
+      const h = ctx.canvas.height = 200
+      ctx.clearRect(0, 0, w, h)
+      const vals = data.map(d => d[key])
+      const max = Math.max(...vals, 1)
+      const min = 0
+      const pts = data.map((d, i) => ({
+        x: (i / (data.length - 1)) * w,
+        y: h - ((vals[i] - min) / (max - min)) * (h - 20) - 10
+      }))
+
+      // Grid
+      ctx.strokeStyle = '#e5e7eb'
+      ctx.lineWidth = 1
+      for (let i = 0; i <= 4; i++) {
+        const y = 10 + (i / 4) * (h - 20)
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke()
+      }
+
+      // Line
+      ctx.strokeStyle = color
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(pts[0].x, pts[0].y)
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y)
+      ctx.stroke()
+
+      // Label
+      ctx.fillStyle = color
+      ctx.font = '12px sans-serif'
+      ctx.fillText(`${key}: ${vals[vals.length - 1].toFixed(1)}%`, 5, 14)
+    },
+    drawCharts() {
+      this.drawLine(this.cpuCtx, this.metrics, 'cpu_usage', '#3b82f6')
+      this.drawLine(this.memCtx, this.metrics, 'mem_usage_pct', '#10b981')
+    }
+  }
+}
+</script>
+{% endblock %}

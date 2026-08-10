@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Tasks - llama-server-home{% endblock %}
+{% block content %}
+<div x-data="tasksPage()" x-init="init()" class="max-w-6xl mx-auto">
+  <h1 class="text-2xl font-bold mb-6">Tasks</h1>
+
+  <div class="bg-white rounded-lg shadow overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-4 py-2 text-left">ID</th>
+          <th class="px-4 py-2 text-left">Type</th>
+          <th class="px-4 py-2 text-left">Instance</th>
+          <th class="px-4 py-2 text-left">Status</th>
+          <th class="px-4 py-2 text-left">Error</th>
+          <th class="px-4 py-2 text-left">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="task in tasks" :key="task.task_id">
+          <tr class="border-t">
+            <td class="px-4 py-2 font-mono text-xs truncate max-w-[180px]" x-text="task.task_id"></td>
+            <td class="px-4 py-2" x-text="task.type"></td>
+            <td class="px-4 py-2" x-text="task.instance_name"></td>
+            <td class="px-4 py-2">
+              <span class="px-2 py-1 rounded text-xs"
+                    :class="{
+                      'bg-green-100 text-green-800': task.status === 'FINISHED',
+                      'bg-red-100 text-red-800': task.status === 'FAILED',
+                      'bg-yellow-100 text-yellow-800': task.status === 'INIT' || task.status === 'PROCESSING',
+                      'bg-gray-100 text-gray-800': !task.status
+                    }"
+                    x-text="task.status || '-'"></span>
+            </td>
+            <td class="px-4 py-2 text-xs text-red-600 truncate max-w-xs" x-text="task.error_msg || ''"></td>
+            <td class="px-4 py-2">
+              <button x-show="task.status === 'INIT'"
+                      @click="deleteTask(task.task_id)"
+                      class="text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">Delete</button>
+            </td>
+          </tr>
+        </template>
+        <tr x-show="tasks.length === 0">
+          <td colspan="6" class="px-4 py-4 text-gray-500 text-center">No tasks</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function tasksPage() {
+  return {
+    tasks: [],
+    init() {
+      this.fetchData()
+      setInterval(() => this.fetchData(), 2000)
+    },
+    async fetchData() {
+      try {
+        this.tasks = await fetch('/api/tasks').then(r => r.json())
+      } catch (e) { console.error(e) }
+    },
+    async deleteTask(id) {
+      if (!confirm('Delete this task?')) return
+      try { await fetch(`/api/tasks/${id}`, { method: 'DELETE' }) } catch (e) { alert(e.message) }
+    }
+  }
+}
+</script>
+{% endblock %}

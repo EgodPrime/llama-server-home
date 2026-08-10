@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Storage - llama-server-home{% endblock %}
+{% block content %}
+<div x-data="storagePage()" x-init="init()" class="max-w-6xl mx-auto">
+  <h1 class="text-2xl font-bold mb-6">Storage</h1>
+
+  <div class="mb-4">
+    <nav class="text-sm">
+      <a href="#" @click.prevent="navigate('')" class="text-blue-600 hover:underline">Root</a>
+      <template x-for="(part, i) in pathParts" :key="i">
+        <span class="mx-1">/</span>
+        <a href="#"
+           @click.prevent="navigate(pathParts.slice(0, i + 1).join('/'))"
+           class="text-blue-600 hover:underline"
+           x-text="part"></a>
+      </template>
+    </nav>
+  </div>
+
+  <div class="bg-white rounded-lg shadow overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-4 py-2 text-left">Name</th>
+          <th class="px-4 py-2 text-left">Type</th>
+          <th class="px-4 py-2 text-left">Path</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="item in items" :key="item.path">
+          <tr class="border-t">
+            <td class="px-4 py-2">
+              <a x-show="item.type === 'directory'"
+                 @click="openDir(item.path)"
+                 class="text-blue-600 hover:underline cursor-pointer"
+                 x-text="item.name"></a>
+              <span x-show="item.type === 'file'" x-text="item.name"></span>
+            </td>
+            <td class="px-4 py-2" x-text="item.type"></td>
+            <td class="px-4 py-2 font-mono text-xs" x-text="item.path"></td>
+          </tr>
+        </template>
+        <tr x-show="items.length === 0">
+          <td colspan="3" class="px-4 py-4 text-gray-500 text-center">Empty</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function storagePage() {
+  return {
+    items: [],
+    currentPath: '',
+    init() { this.fetchData() },
+    get pathParts() { return this.currentPath.split('/').filter(Boolean) },
+    openDir(path) { this.currentPath = path },
+    navigate(path) { this.currentPath = path },
+    async fetchData() {
+      try {
+        const url = this.currentPath
+          ? `/api/storage/list_dir/${this.currentPath}`
+          : '/api/storage/list_root'
+        this.items = await fetch(url).then(r => r.json())
+      } catch (e) { this.items = [] }
+    }
+  }
+}
+</script>
+{% endblock %}

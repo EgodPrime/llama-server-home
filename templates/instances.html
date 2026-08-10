@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Instances - llama-server-home{% endblock %}
+{% block content %}
+<div x-data="instancesPage()" x-init="init()" class="max-w-6xl mx-auto">
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-bold">Instances</h1>
+    <a href="/deploy" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">+ New Instance</a>
+  </div>
+
+  <div class="bg-white rounded-lg shadow overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-4 py-2 text-left">Name</th>
+          <th class="px-4 py-2 text-left">Status</th>
+          <th class="px-4 py-2 text-left">Port</th>
+          <th class="px-4 py-2 text-left">Model</th>
+          <th class="px-4 py-2 text-left">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="inst in instances" :key="inst.instance_name">
+          <tr class="border-t">
+            <td class="px-4 py-2" x-text="inst.instance_name"></td>
+            <td class="px-4 py-2">
+              <span class="px-2 py-1 rounded text-xs"
+                    :class="{
+                      'bg-green-100 text-green-800': inst.status === 'RUNNING',
+                      'bg-red-100 text-red-800': inst.status === 'ERROR',
+                      'bg-gray-100 text-gray-800': inst.status === 'STOPPED',
+                      'bg-yellow-100 text-yellow-800': inst.status === 'PROCESSING' || inst.status === 'INIT'
+                    }"
+                    x-text="inst.status || '-'"></span>
+            </td>
+            <td class="px-4 py-2" x-text="inst.port || '-'"></td>
+            <td class="px-4 py-2 truncate max-w-xs" x-text="inst.model_path"></td>
+            <td class="px-4 py-2 space-x-2">
+              <button x-show="inst.status === 'RUNNING'"
+                      @click="stop(inst.instance_name)"
+                      class="text-xs bg-yellow-500 text-white px-2 py-1 rounded hover:bg-yellow-600">Stop</button>
+              <button x-show="inst.status === 'STOPPED' || inst.status === 'ERROR'"
+                      @click="resume(inst.instance_name)"
+                      class="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600">Resume</button>
+              <button @click="showLogs(inst.instance_name)"
+                      class="text-xs bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600">Logs</button>
+              <button @click="deleteInst(inst.instance_name)"
+                      class="text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">Delete</button>
+            </td>
+          </tr>
+        </template>
+        <tr x-show="instances.length === 0">
+          <td colspan="5" class="px-4 py-4 text-gray-500 text-center">No instances</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Logs Modal -->
+  <div x-show="showLogModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+       x-cloak @click.self="showLogModal = false">
+    <div class="bg-white rounded-lg p-4 w-full max-w-2xl max-h-[80vh] flex flex-col">
+      <div class="flex justify-between items-center mb-2">
+        <h3 class="font-bold">Logs: <span x-text="logInstanceName"></span></h3>
+        <button @click="showLogModal = false" class="text-gray-500 hover:text-gray-700">&times;</button>
+      </div>
+      <pre class="bg-gray-900 text-green-400 text-xs p-3 rounded flex-1 overflow-auto whitespace-pre-wrap"
+           x-text="logContent"></pre>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function instancesPage() {
+  return {
+    instances: [],
+    showLogModal: false,
+    logInstanceName: '',
+    logContent: '',
+    init() {
+      this.fetchData()
+      setInterval(() => this.fetchData(), 2000)
+    },
+    async fetchData() {
+      try {
+        const res = await fetch('/api/instances')
+        this.instances = await res.json()
+      } catch (e) { console.error(e) }
+    },
+    async stop(name) {
+      if (!confirm(`Stop ${name}?`)) return
+      try { await fetch(`/api/tasks/stop/${name}`, { method: 'POST' }) } catch (e) { alert(e.message) }
+    },
+    async resume(name) {
+      try { await fetch(`/api/tasks/resume/${name}`, { method: 'POST' }) } catch (e) { alert(e.message) }
+    },
+    async deleteInst(name) {
+      if (!confirm(`Delete ${name}?`)) return
+      try { await fetch(`/api/instances/${name}`, { method: 'DELETE' }) } catch (e) { alert(e.message) }
+    },
+    async showLogs(name) {
+      this.logInstanceName = name
+      this.showLogModal = true
+      try {
+        const res = await fetch(`/api/instances/${name}/logs`)
+        const data = await res.json()
+        this.logContent = data.content || ''
+      } catch (e) { this.logContent = 'Error loading logs' }
+    }
+  }
+}
+</script>
+{% endblock %}

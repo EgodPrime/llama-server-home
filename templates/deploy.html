@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block title %}Deploy - llama-server-home{% endblock %}
+{% block content %}
+<div x-data="deployPage()" x-init="init()" class="max-w-3xl mx-auto">
+  <h1 class="text-2xl font-bold mb-6">Deploy Instance</h1>
+
+  <div class="bg-white rounded-lg shadow p-6">
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700 mb-1">Instance Name (auto)</label>
+      <input type="text" :value="instanceName" readonly
+             class="w-full border rounded px-3 py-2 text-sm bg-gray-100 font-mono text-gray-600">
+    </div>
+
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700 mb-1">Port</label>
+      <input type="number" x-model.number="form.port" min="1024" max="65535"
+             class="w-full border rounded px-3 py-2 text-sm">
+    </div>
+
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700 mb-1">Model</label>
+      <select x-model="form.selectedModel" @change="onModelChange"
+              class="w-full border rounded px-3 py-2 text-sm">
+        <option value="">Select a model...</option>
+        <template x-for="m in models" :key="m.model_name">
+          <option :value="m.model_name" x-text="m.model_name"></option>
+        </template>
+      </select>
+    </div>
+
+    <!-- GPU Selection -->
+    <div class="mb-4" x-show="gpus.length > 0">
+      <label class="block text-sm font-medium text-gray-700 mb-1">GPU (sets CUDA_VISIBLE_DEVICES)</label>
+      <div class="flex flex-wrap gap-3">
+        <template x-for="gpu in gpus" :key="gpu.id">
+          <label class="inline-flex items-center gap-2 px-3 py-2 border rounded text-sm cursor-pointer hover:bg-gray-50"
+                 :class="selectedGpus.includes(gpu.id) ? 'bg-blue-50 border-blue-400' : 'border-gray-300'">
+            <input type="checkbox" :value="gpu.id" x-model="selectedGpus" class="rounded">
+            <span x-text="'GPU ' + gpu.id + ': ' + gpu.model"></span>
+          </label>
+        </template>
+      </div>
+      <div class="text-xs text-gray-500 mt-1">
+        <span x-show="selectedGpus.length > 0"
+              x-text="'CUDA_VISIBLE_DEVICES=' + selectedGpus.join(',')"></span>
+        <span x-show="selectedGpus.length === 0">No GPU selected</span>
+      </div>
+    </div>
+
+    <!-- llama-server cmd args -->
+    <div class="mb-4">
+      <div class="flex items-center justify-between mb-1">
+        <label class="block text-sm font-medium text-gray-700">llama-server cmd args</label>
+        <button type="button" @click="showHelpModal = true"
+                class="text-blue-600 hover:text-blue-800 font-bold text-lg w-6 h-6 flex items-center justify-center rounded-full hover:bg-blue-100"
+                title="llama-server --help">?</button>
+      </div>
+      <textarea x-model="form.cmd_args" rows="3" placeholder="--n_ctx 4096 --n_gpu_layers -1"
+                class="w-full border rounded px-3 py-2 text-sm font-mono"></textarea>
+    </div>
+
+    <div class="flex gap-2">
+      <button @click="submit()" :disabled="loading"
+              class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50">
+        <span x-show="!loading">Create Task</span>
+        <span x-show="loading">Creating...</span>
+      </button>
+      <button @click="showPreviewModal = true"
+              class="px-4 py-2 rounded border text-sm hover:bg-gray-50">Preview Cmd</button>
+      <a href="/tasks" class="px-4 py-2 rounded border text-sm hover:bg-gray-50">View Tasks</a>
+    </div>
+  </div>
+
+  <!-- Preview Modal -->
+  <div x-show="showPreviewModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+       x-cloak @click.self="showPreviewModal = false">
+    <div class="bg-white rounded-lg p-4 w-full max-w-3xl max-h-[80vh] flex flex-col">
+      <div class="flex justify-between items-center mb-2">
+        <h3 class="font-bold">Full Command Preview</h3>
+        <button @click="showPreviewModal = false" class="text-gray-500 hover:text-gray-700 text-xl">&times;</button>
+      </div>
+      <pre class="bg-gray-900 text-green-400 text-xs p-3 rounded overflow-auto whitespace-pre-wrap font-mono" x-text="previewCmd"></pre>
+    </div>
+  </div>
+
+  <!-- Help Modal -->
+  <div x-show="showHelpModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+       x-cloak @click.self="showHelpModal = false">
+    <div class="bg-white rounded-lg p-4 w-full max-w-3xl max-h-[80vh] flex flex-col">
+      <div class="flex justify-between items-center mb-2">
+        <h3 class="font-bold">llama-server --help</h3>
+        <button @click="showHelpModal = false" class="text-gray-500 hover:text-gray-700 text-xl">&times;</button>
+      </div>
+      <div class="flex-1 overflow-auto">
+        <pre class="bg-gray-900 text-green-400 text-xs p-3 rounded overflow-auto whitespace-pre-wrap font-mono" x-text="helpText"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function deployPage() {
+  return {
+    models: [],
+    gpus: [],
+    loading: false,
+    selectedGpus: [],
+    showHelpModal: false,
+    showPreviewModal: false,
+    get instanceName() {
+      const model = this.form.selectedModel || 'untitled'
+      const gpus = this.selectedGpus.length > 0 ? this.selectedGpus.join(',') : 'cpu'
+      const port = this.form.port || 8080
+      return `${model}_${gpus}_${port}`
+    },
+    get previewCmd() {
+      const llamaPath = this.llamaPath
+      const modelPath = this.form.model_path || 'MODEL_PATH'
+      const mmprojPath = this.form.mmproj_path || null
+      const port = this.form.port || 8080
+      const cmdArgs = this.form.cmd_args || ''
+
+      let cmd = `${llamaPath} --model ${modelPath} --host 127.0.0.1 --port ${port}`
+      if (mmprojPath) cmd += ` --mmproj ${mmprojPath}`
+      if (cmdArgs.trim()) cmd += ` ${cmdArgs.trim()}`
+
+      let env = ''
+      if (this.selectedGpus.length > 0) {
+        env = `CUDA_VISIBLE_DEVICES=${this.selectedGpus.join(',')}\n`
+      }
+
+      return `${env}${cmd}`
+    },
+    helpText: `Commonly used llama-server arguments:
+
+-c, --ctx-size N                 prompt context size (default: from model)
+-n, --predict N                  number of tokens to predict (default: -1=infinity)
+-t, --threads N                  CPU threads for generation (default: -1=auto)
+-ngl, --gpu-layers N             GPU layers to offload ('all', 'auto', or number)
+-sm, --split-mode {none,layer,row,tensor}
+                                 how to split model across GPUs (default: layer)
+-ts, --tensor-split N0,N1,...    fraction per GPU, e.g. 3,1
+-ncmoe, --n-cpu-moe N            keep first N MoE layers on CPU
+-cmoe, --cpu-moe                 keep all MoE layers on CPU
+-np, --parallel N                server slots (default: -1=auto)
+--host HOST                      listen address (default: 127.0.0.1)
+--port PORT                      listen port (default: 8080)
+--temp N                         temperature (default: 0.80)
+--top-k N                        top-k sampling (default: 40)
+--top-p N                        top-p sampling (default: 0.95)
+-m, --model FNAME                model path (handled by this tool)
+-mm, --mmproj FNAME              path to a multimodal projector file.
+--lora FNAME                     LoRA adapter path
+
+For full help, run: llama-server --help`,
+    llamaPath: '/home/egod/Projects/llama.cpp/build/bin/llama-server',
+    form: {
+      port: 8080,
+      selectedModel: '',
+      model_path: '',
+      mmproj_path: '',
+      cmd_args: '',
+    },
+    init() {
+      this.fetchModels()
+      this.fetchGpus()
+    },
+    async fetchModels() {
+      try {
+        this.models = await fetch('/api/storage/list_models').then(r => r.json())
+      } catch (e) { console.error(e) }
+    },
+    async fetchGpus() {
+      try {
+        const metrics = await fetch('/api/metrics?n=1').then(r => r.json())
+        if (metrics && metrics.length > 0) {
+          const gpus = metrics[0].gpus || []
+          this.gpus = gpus.map(g => ({ id: g.id, model: g.model }))
+        }
+      } catch (e) { console.error(e) }
+    },
+    onModelChange(name) {
+      const m = this.models.find(x => x.model_name === name)
+      if (m) {
+        this.form.model_path = m.model_file || ''
+        this.form.mmproj_path = m.mmproj_file || ''
+      }
+    },
+    getEnv() {
+      const env = {}
+      if (this.selectedGpus.length > 0) {
+        env['CUDA_VISIBLE_DEVICES'] = this.selectedGpus.join(',')
+      }
+      return Object.keys(env).length > 0 ? env : null
+    },
+    async submit() {
+      if (!this.form.instance_name) { alert('Instance name required'); return }
+      if (!this.form.model_path) { alert('Model required'); return }
+      this.loading = true
+      try {
+        const res = await fetch('/api/tasks/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            instance_name: this.instanceName,
+            ...this.form,
+            type: 'DEPLOY',
+            env: this.getEnv(),
+          }),
+        })
+        const data = await res.json()
+        if (res.ok) {
+          alert('Task created: ' + data.task_id)
+          window.location.href = '/tasks'
+        } else {
+          alert('Error: ' + (data.detail || 'Failed'))
+        }
+      } catch (e) { alert(e.message) } finally {
+        this.loading = false
+      }
+    }
+  }
+}
+</script>
+{% endblock %}

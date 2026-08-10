@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}llama-server-home{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  {% block head %}{% endblock %}
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <div class="flex min-h-screen">
+    <!-- Sidebar -->
+    <nav class="w-52 bg-gray-900 text-white fixed h-full">
+      <div class="p-4 text-xl font-bold border-b border-gray-700">llama-server-home</div>
+      <ul class="mt-4">
+        <li><a href="/" class="block px-4 py-2 hover:bg-gray-700 {% if request.path == '/' %}bg-gray-700{% endif %}">Home</a></li>
+        <li><a href="/instances" class="block px-4 py-2 hover:bg-gray-700 {% if '/instances' in request.path %}bg-gray-700{% endif %}">Instances</a></li>
+        <li><a href="/deploy" class="block px-4 py-2 hover:bg-gray-700 {% if request.path == '/deploy' %}bg-gray-700{% endif %}">Deploy</a></li>
+        <li><a href="/tasks" class="block px-4 py-2 hover:bg-gray-700 {% if request.path == '/tasks' %}bg-gray-700{% endif %}">Tasks</a></li>
+        <li><a href="/storage" class="block px-4 py-2 hover:bg-gray-700 {% if request.path == '/storage' %}bg-gray-700{% endif %}">Storage</a></li>
+        <li><a href="/profiles" class="block px-4 py-2 hover:bg-gray-700 {% if request.path == '/profiles' %}bg-gray-700{% endif %}">Profiles</a></li>
+        <li><a href="/metrics" class="block px-4 py-2 hover:bg-gray-700 {% if request.path == '/metrics' %}bg-gray-700{% endif %}">Metrics</a></li>
+      </ul>
+    </nav>
+    <!-- Main content -->
+    <main class="ml-52 flex-1 p-6">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

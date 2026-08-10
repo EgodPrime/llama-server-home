@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Home - llama-server-home{% endblock %}
+{% block content %}
+<div x-data="homePage()" x-init="init()" class="max-w-6xl mx-auto">
+  <h1 class="text-2xl font-bold mb-6">Home</h1>
+
+  <!-- Stats cards -->
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+    <div class="bg-white p-4 rounded-lg shadow">
+      <div class="text-gray-500 text-sm">Instances</div>
+      <div class="text-2xl font-bold">{{ instances | length }}</div>
+    </div>
+    <div class="bg-white p-4 rounded-lg shadow">
+      <div class="text-gray-500 text-sm">Running</div>
+      <div class="text-2xl font-bold text-green-600">{{ running_count }}</div>
+    </div>
+    <div class="bg-white p-4 rounded-lg shadow">
+      <div class="text-gray-500 text-sm">CPU Usage</div>
+      <div class="text-2xl font-bold">{{ cpu_usage | round(1) }}%</div>
+    </div>
+    <div class="bg-white p-4 rounded-lg shadow">
+      <div class="text-gray-500 text-sm">Memory</div>
+      <div class="text-2xl font-bold">{{ mem_usage | round(1) }}%</div>
+    </div>
+  </div>
+
+  <!-- Recent instances -->
+  <div class="bg-white rounded-lg shadow mb-6">
+    <div class="p-4 border-b">
+      <h2 class="text-lg font-semibold">Recent Instances</h2>
+    </div>
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-4 py-2 text-left">Name</th>
+          <th class="px-4 py-2 text-left">Status</th>
+          <th class="px-4 py-2 text-left">Port</th>
+          <th class="px-4 py-2 text-left">Model</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="inst in instances.slice(0, 5)" :key="inst.instance_name">
+          <tr class="border-t">
+            <td class="px-4 py-2" x-text="inst.instance_name"></td>
+            <td class="px-4 py-2">
+              <span class="px-2 py-1 rounded text-xs"
+                    :class="{
+                      'bg-green-100 text-green-800': inst.status === 'RUNNING',
+                      'bg-red-100 text-red-800': inst.status === 'ERROR',
+                      'bg-gray-100 text-gray-800': inst.status === 'STOPPED',
+                      'bg-yellow-100 text-yellow-800': inst.status === 'PROCESSING' || inst.status === 'INIT'
+                    }"
+                    x-text="inst.status || '-'"></span>
+            </td>
+            <td class="px-4 py-2" x-text="inst.port || '-'"></td>
+            <td class="px-4 py-2 truncate max-w-xs" x-text="inst.model_path"></td>
+          </tr>
+        </template>
+        <tr x-show="instances.length === 0">
+          <td colspan="4" class="px-4 py-4 text-gray-500 text-center">No instances</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function homePage() {
+  return {
+    instances: {{ instances | tojson }},
+    cpu_usage: {{ cpu_usage }},
+    mem_usage: {{ mem_usage }},
+    running_count: {{ running_count }},
+    init() {
+      setInterval(() => this.fetchData(), 3000)
+    },
+    async fetchData() {
+      try {
+        const [insts, mets] = await Promise.all([
+          fetch('/api/instances').then(r => r.json()),
+          fetch('/api/metrics?n=1').then(r => r.json())
+        ])
+        this.instances = insts
+        this.running_count = insts.filter(i => i.status === 'RUNNING').length
+        if (mets && mets.length > 0) {
+          this.cpu_usage = mets[mets.length - 1].cpu_usage
+          this.mem_usage = mets[mets.length - 1].mem_usage_pct
+        }
+      } catch (e) {
+        console.error(e)
+      }
+    }
+  }
+}
+</script>
+{% endblock %}
