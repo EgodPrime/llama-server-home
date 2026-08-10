@@ -142,6 +142,8 @@ function deployPage() {
     gpus: [],
     loading: false,
     selectedGpus: [],
+    _storageDir: null,
+    _llamaPath: null,
     showHelpModal: false,
     showPreviewModal: false,
     get instanceName() {
@@ -151,14 +153,14 @@ function deployPage() {
       return `${model}_${gpus}_${port}`
     },
     get storageDir() {
-      return '/home/egod/Projects/ggufs'
+      return this._storageDir || ''
     },
     getAsAbs(path) {
       if (!path) return ''
       return this.storageDir + '/' + path
     },
     get previewCmd() {
-      const llamaPath = this.llamaPath
+      const llamaPath = this._llamaPath || ''
       const modelPath = this.form.model_path ? this.getAsAbs(this.form.model_path) : 'MODEL_PATH'
       const mmprojPath = this.form.mmproj_path ? this.getAsAbs(this.form.mmproj_path) : null
       const host = this.form.host || '0.0.0.0'
@@ -198,7 +200,6 @@ function deployPage() {
 -kvu, -no-kvu
 
 For full help, run: llama-server --help`,
-    llamaPath: '/home/egod/Projects/llama.cpp/build/bin/llama-server',
     form: {
       host: '0.0.0.0',
       port: 8021,
@@ -210,6 +211,14 @@ For full help, run: llama-server --help`,
     init() {
       this.fetchModels()
       this.fetchGpus()
+      this.fetchConfig()
+    },
+    async fetchConfig() {
+      try {
+        const cfg = await fetch('/api/config').then(r => r.json())
+        this._storageDir = cfg.storage_dir
+        this._llamaPath = cfg.llama_path
+      } catch (e) { console.error(e) }
     },
     async fetchModels() {
       try {
@@ -268,7 +277,7 @@ For full help, run: llama-server --help`,
       return args.trim()
     },
     async submit() {
-      if (!this.instanceName || this.instanceName === 'untitled_cpu_8021') { alert('Select a model first'); return }
+      if (!this.instanceName || this.instanceName === 'untitled_cpu_8080') { alert('Select a model first'); return }
       if (!this.form.model_path) { alert('Select a model file'); return }
       this.loading = true
       try {

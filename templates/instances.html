@@ -14,6 +14,7 @@
           <th class="px-4 py-2 text-left">Name</th>
           <th class="px-4 py-2 text-left">Status</th>
           <th class="px-4 py-2 text-left">Host</th>
+          <th class="px-4 py-2 text-left">GPU</th>
           <th class="px-4 py-2 text-left">Port</th>
           <th class="px-4 py-2 text-left">Actions</th>
         </tr>
@@ -33,6 +34,7 @@
                     x-text="inst.status || '-'"></span>
             </td>
             <td class="px-4 py-2" x-text="inst.host || '-'"></td>
+            <td class="px-4 py-2" x-text="inst.gpu || 'unknown'"></td>
             <td class="px-4 py-2" x-text="inst.port || '-'"></td>
             <td class="px-4 py-2 space-x-2">
               <button x-show="inst.status === 'RUNNING'"
@@ -51,7 +53,7 @@
           </tr>
         </template>
         <tr x-show="instances.length === 0">
-          <td colspan="5" class="px-4 py-4 text-gray-500 text-center">No instances</td>
+          <td colspan="6" class="px-4 py-4 text-gray-500 text-center">No instances</td>
         </tr>
       </tbody>
     </table>

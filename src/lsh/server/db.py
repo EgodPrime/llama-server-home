@@ -1,6 +1,7 @@
 import json
 import sqlite3
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
@@ -50,6 +51,7 @@ class Database:
                 port INTEGER,
                 env TEXT,
                 cmd_args TEXT,
+                log_file TEXT,
                 last_heartbeat REAL,
                 last_error TEXT,
                 created_at REAL,
@@ -95,56 +97,8 @@ class Database:
             )
         """)
 
-        self._migrate_schema()
         self.conn.commit()
         logger.info("Database schema initialized")
-
-    def _migrate_schema(self):
-        cur = self.conn.cursor()
-        try:
-            cur.execute("ALTER TABLE instances ADD COLUMN cmd_args TEXT")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            cur.execute("ALTER TABLE instances ADD COLUMN host TEXT")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            cur.execute("ALTER TABLE instance_tasks ADD COLUMN host TEXT")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            cur.execute("ALTER TABLE instance_tasks ADD COLUMN cmd_args TEXT")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            cur.execute("DROP TABLE IF EXISTS profiles")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            cur.execute("ALTER TABLE instances DROP COLUMN model_path")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            cur.execute("ALTER TABLE instances DROP COLUMN mmproj_path")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            cur.execute("ALTER TABLE instances DROP COLUMN config")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            cur.execute("ALTER TABLE instance_tasks DROP COLUMN model_path")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            cur.execute("ALTER TABLE instance_tasks DROP COLUMN mmproj_path")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            cur.execute("ALTER TABLE instance_tasks DROP COLUMN config")
-        except sqlite3.OperationalError:
-            pass
 
     def _row_to_dict(self, row: sqlite3.Row) -> Dict[str, Any]:
         return dict(row)
@@ -172,8 +126,8 @@ class Database:
     def create_instance(self, instance: Dict[str, Any]):
         self._exec_commit(
             """INSERT INTO instances
-            (instance_name, status, pid, host, port, env, cmd_args, last_heartbeat, last_error, created_at, started_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (instance_name, status, pid, host, port, env, cmd_args, log_file, last_heartbeat, last_error, created_at, started_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 instance["instance_name"],
                 instance.get("status"),
@@ -182,6 +136,7 @@ class Database:
                 instance.get("port"),
                 json.dumps(instance.get("env")) if instance.get("env") else None,
                 instance.get("cmd_args"),
+                instance.get("log_file"),
                 instance.get("last_heartbeat"),
                 instance.get("last_error"),
                 instance.get("created_at", time.time()),
@@ -201,7 +156,126 @@ class Database:
         self._exec_commit(f"UPDATE instances SET {', '.join(set_parts)} WHERE instance_name = ?", tuple(params))
 
     def delete_instance(self, instance_name: str):
+        self._exec_commit("DELETE FROM logs WHERE instance_name = ?", (instance_name,))
+        self._exec_commit(
+            "DELETE FROM instance_tasks WHERE instance_name = ?", (instance_name,)
+        )
         self._exec_commit("DELETE FROM instances WHERE instance_name = ?", (instance_name,))
+
+    def rename_instance(self, old_name: str, new_name: str):
+        self._exec_commit(
+            "UPDATE instances SET instance_name = ? WHERE instance_name = ?",
+            (new_name, old_name),
+        )
+        self._exec_commit(
+            "UPDATE instance_tasks SET instance_name = ? WHERE instance_name = ?",
+            (new_name, old_name),
+        )
+        self._exec_commit(
+            "UPDATE logs SET instance_name = ? WHERE instance_name = ?",
+            (new_name, old_name),
+        )
+
+    def migrate_instance_names(self):
+        instances = self.list_instances()
+        migrated = 0
+        for inst in instances:
+            old_name = inst["instance_name"]
+            if not old_name.startswith("port-"):
+                continue
+            port = inst["port"]
+            if not port:
+                continue
+            cmd_args = inst.get("cmd_args") or ""
+            model_basename = None
+            env = {}
+            if isinstance(inst.get("env"), str):
+                try:
+                    import json
+                    env = json.loads(inst["env"])
+                except Exception:
+                    pass
+            elif isinstance(inst.get("env"), dict):
+                env = inst["env"]
+
+            i = 0
+            tokens = cmd_args.split()
+            while i < len(tokens):
+                if tokens[i] in ('-m', '--model') and i + 1 < len(tokens):
+                    from pathlib import Path
+                    model_basename = tokens[i + 1]
+                    model_basename = Path(model_basename).name
+                    for ext in ('.gguf', '.GGUF'):
+                        if model_basename.endswith(ext):
+                            model_basename = model_basename[:-len(ext)]
+                            break
+                    break
+                i += 1
+
+            if not model_basename:
+                continue
+
+            gpu_id = env.get('CUDA_VISIBLE_DEVICES', 'unknown').replace(' ', '_')
+            new_name = f"{model_basename}_{gpu_id}_{port}"
+
+            if new_name != old_name:
+                self.rename_instance(old_name, new_name)
+                logger.info(f"Migrated instance {old_name} -> {new_name}")
+                migrated += 1
+
+        if migrated > 0:
+            logger.info(f"Instance migration complete: {migrated} renamed")
+
+    def migrate_log_file_column(self):
+        log_dir = Path(__file__).resolve().parents[2] / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        instances = self.list_instances()
+        migrated = 0
+        for inst in instances:
+            old_name = inst["instance_name"]
+            log_file = inst.get("log_file")
+
+            cmd_args = inst.get("cmd_args") or ""
+            # Extract log file from cmd_args
+            new_log_file = None
+            new_cmd_args_tokens = []
+            tokens = cmd_args.split()
+            i = 0
+            while i < len(tokens):
+                if tokens[i] == "--log-file" and i + 1 < len(tokens):
+                    lf = tokens[i + 1]
+                    p = Path(lf)
+                    if not p.is_absolute():
+                        resolved = (log_dir / p).resolve()
+                        if resolved.exists():
+                            lf = str(resolved)
+                        else:
+                            # Try from cwd (unknown, just use as-is)
+                            pass
+                    new_log_file = lf
+                    i += 2
+                else:
+                    new_cmd_args_tokens.append(tokens[i])
+                    i += 1
+
+            if log_file is None or log_file != new_log_file:
+                default_log_file = str(log_dir / f"{old_name}.log")
+                final_log_file = new_log_file or default_log_file
+                self._exec_commit(
+                    "UPDATE instances SET log_file = ? WHERE instance_name = ?",
+                    (final_log_file, old_name),
+                )
+                new_cmd_args = " ".join(new_cmd_args_tokens)
+                if new_cmd_args != cmd_args:
+                    self._exec_commit(
+                        "UPDATE instances SET cmd_args = ? WHERE instance_name = ?",
+                        (new_cmd_args, old_name),
+                    )
+                logger.info(f"Migrated log_file for {old_name}: {final_log_file}")
+                migrated += 1
+
+        if migrated > 0:
+            logger.info(f"Log file migration complete: {migrated} instance(s)")
 
     # --- Instance Tasks ---
 

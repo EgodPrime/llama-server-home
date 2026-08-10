@@ -35,7 +35,6 @@
           <th class="px-4 py-2 text-left">Name</th>
           <th class="px-4 py-2 text-left">Status</th>
           <th class="px-4 py-2 text-left">Port</th>
-          <th class="px-4 py-2 text-left">Model</th>
         </tr>
       </thead>
       <tbody>
@@ -53,11 +52,10 @@
                     x-text="inst.status || '-'"></span>
             </td>
             <td class="px-4 py-2" x-text="inst.port || '-'"></td>
-            <td class="px-4 py-2 truncate max-w-xs" x-text="inst.model_path"></td>
           </tr>
         </template>
         <tr x-show="instances.length === 0">
-          <td colspan="4" class="px-4 py-4 text-gray-500 text-center">No instances</td>
+          <td colspan="3" class="px-4 py-4 text-gray-500 text-center">No instances</td>
         </tr>
       </tbody>
     </table>

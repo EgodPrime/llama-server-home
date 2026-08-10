@@ -23,7 +23,9 @@ def parse_json_field(value: str | None) -> Dict[str, Any] | List[Any] | None:
 
 def format_instance(doc: Dict[str, Any]) -> Dict[str, Any]:
     doc = doc.copy()
-    doc["env"] = parse_json_field(doc.get("env"))
+    env = parse_json_field(doc.get("env"))
+    doc["env"] = env
+    doc["gpu"] = env.get("CUDA_VISIBLE_DEVICES") if isinstance(env, dict) else None
     doc["cmd_args"] = doc.get("cmd_args")
     return doc
 
@@ -83,10 +85,12 @@ async def get_instance_cmd(name: str, request: Request, db: Database = Depends(g
     if not cmd_args_raw:
         raise HTTPException(status_code=400, detail="Instance missing cmd_args")
 
-    log_dir = Path(__file__).resolve().parents[2] / "logs"
-    log_file = log_dir / f"{name}.log"
+    log_file = inst.get("log_file")
+    if not log_file:
+        log_dir = Path(__file__).resolve().parents[2] / "logs"
+        log_file = str(log_dir / f"{name}.log")
 
-    base = [str(agent.llama_path), "--log-file", str(log_file)]
+    base = [str(agent.llama_path), "--log-file", log_file]
     extra = shlex.split(cmd_args_raw)
     cmd = base + extra
 
@@ -179,7 +183,7 @@ def _safe_resolve(base: str, user_path: str) -> str:
     return resolved
 
 
-def _list_directory(dir_path: str, base_path: str, hidden_ok: bool = False) -> List[Dict[str, Any]]:
+def _list_directory(dir_path: str, base_path: str, hidden_ok: bool = False, filter_ext: str | None = None) -> List[Dict[str, Any]]:
     result = []
     for item in os.listdir(dir_path):
         if not hidden_ok and item.startswith("."):
@@ -188,7 +192,9 @@ def _list_directory(dir_path: str, base_path: str, hidden_ok: bool = False) -> L
         rel_path = os.path.relpath(item_path, base_path)
         if os.path.isdir(item_path):
             result.append({"name": item, "type": "directory", "path": rel_path})
-        else:
+        elif filter_ext and item.endswith(filter_ext):
+            result.append({"name": item, "type": "file", "path": rel_path})
+        elif not filter_ext:
             result.append({"name": item, "type": "file", "path": rel_path})
     return result
 
@@ -198,7 +204,7 @@ async def list_storage_root(db: Database = Depends(get_db)):
     storage_dir = load_config()["storage_dir"]
     if not os.path.exists(storage_dir):
         return []
-    return _list_directory(storage_dir, storage_dir, hidden_ok=False)
+    return _list_directory(storage_dir, storage_dir, hidden_ok=False, filter_ext=".gguf")
 
 
 @api_router.get("/api/storage/list_dir/{dir_path:path}")
@@ -207,7 +213,7 @@ async def list_storage_dir(dir_path: str, db: Database = Depends(get_db)):
     target_dir = _safe_resolve(storage_dir, dir_path)
     if not os.path.exists(target_dir) or not os.path.isdir(target_dir):
         raise HTTPException(status_code=404, detail="Directory not found")
-    return _list_directory(target_dir, storage_dir)
+    return _list_directory(target_dir, storage_dir, filter_ext=".gguf")
 
 
 @api_router.get("/api/storage/list_models")
@@ -243,3 +249,12 @@ async def list_metrics(n: int = Query(default=20, ge=1, le=500), db: Database = 
         m["gpus"] = parse_gpus(m.get("gpus_info"))
         m.pop("gpus_info", None)
     return metrics
+
+
+@api_router.get("/api/config")
+async def get_config(db: Database = Depends(get_db)):
+    cfg = load_config()
+    return {
+        "storage_dir": cfg.get("storage_dir"),
+        "llama_path": cfg.get("llama_path"),
+    }

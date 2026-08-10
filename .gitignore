@@ -13,8 +13,12 @@ db_dir
 
 # config files
 controller.yaml
+config.yaml
 node.yaml
 frontend/node_modules/
 
 # instance logs
 logs/
+
+# opencode config
+.opencode/

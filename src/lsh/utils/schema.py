@@ -6,7 +6,7 @@ import time
 import uuid
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Instance(BaseModel):
@@ -16,6 +16,19 @@ class Instance(BaseModel):
     host: Optional[str] = "0.0.0.0"
     port: Optional[int] = None
     env: Optional[Dict[str, str]] = None
+
+    @field_validator("env", mode="before")
+    @classmethod
+    def parse_env(cls, v):
+        if isinstance(v, str):
+            try:
+                import json
+                return json.loads(v)
+            except (json.JSONDecodeError, TypeError):
+                return None
+        return v
+
+    log_file: Optional[str] = None
     cmd_args: Optional[str] = None
     last_heartbeat: Optional[float] = None
     last_error: Optional[str] = None
@@ -33,6 +46,18 @@ class InstanceTask(BaseModel):
     status: Optional[str] = None
     error_msg: Optional[str] = None
     env: Optional[Dict[str, str]] = None
+
+    @field_validator("env", mode="before")
+    @classmethod
+    def parse_env(cls, v):
+        if isinstance(v, str):
+            try:
+                import json
+                return json.loads(v)
+            except (json.JSONDecodeError, TypeError):
+                return None
+        return v
+
     cmd_args: Optional[str] = None
     created_at: Optional[float] = Field(default_factory=time.time)
     started_at: Optional[float] = None

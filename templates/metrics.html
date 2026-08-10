@@ -20,7 +20,7 @@
     <div class="bg-white p-4 rounded-lg shadow">
       <div class="text-gray-500 text-sm mb-2">GPU</div>
       <div x-show="!latest?.gpus?.length" class="text-sm text-gray-400">No GPU</div>
-      <template x-for="gpu in latest?.gpus || []" :key="gpu.id">
+      <template x-for="gpu in (latest?.gpus || []).sort((a, b) => a.id - b.id)" :key="gpu.id">
         <div class="text-sm">
           <div class="font-medium" x-text="'GPU ' + gpu.id + ': ' + gpu.model"></div>
           <div class="text-xs text-gray-500"
@@ -41,6 +41,15 @@
     <h3 class="font-semibold mb-3">Memory Usage History</h3>
     <canvas id="memChart" height="200"></canvas>
   </div>
+
+  <!-- GPU Charts: flat grid, 2 sub-charts per row -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+    <template x-for="item in gpuSubCharts" :key="item.id">
+      <div class="bg-white rounded-lg shadow p-4">
+        <canvas :id="item.id" height="200"></canvas>
+      </div>
+    </template>
+  </div>
 </div>
 {% endblock %}
 
@@ -50,40 +59,77 @@ function metricsPage() {
   return {
     metrics: [],
     latest: null,
+    gpuSubCharts: [],
     cpuCtx: null,
     memCtx: null,
     init() {
       this.cpuCtx = document.getElementById('cpuChart')?.getContext('2d')
       this.memCtx = document.getElementById('memChart')?.getContext('2d')
+      this.buildSubCharts()
       this.fetchData()
       setInterval(() => this.fetchData(), 5000)
+    },
+    buildSubCharts() {
+      const gpus = (this.latest?.gpus || []).sort((a, b) => a.id - b.id)
+      this.gpuSubCharts = []
+      for (const gpu of gpus) {
+        this.gpuSubCharts.push({ id: 'gpu' + gpu.id + '_memChart', type: 'mem', gpuId: gpu.id, title: 'GPU ' + gpu.id + ' Memory' })
+        this.gpuSubCharts.push({ id: 'gpu' + gpu.id + '_powerChart', type: 'power', gpuId: gpu.id, title: 'GPU ' + gpu.id + ' Power' })
+      }
     },
     async fetchData() {
       try {
         this.metrics = await fetch('/api/metrics?n=30').then(r => r.json()).then(m => m.reverse())
         if (this.metrics.length > 0) this.latest = this.metrics[this.metrics.length - 1]
-        this.drawCharts()
+        this.buildSubCharts()
+        this.$nextTick(() => this.drawCharts())
       } catch (e) { console.error(e) }
     },
-    drawLine(ctx, data, key, color) {
+    drawLine(ctx, data, key, color, unit, title, alignMinZero) {
       if (!ctx || data.length < 2) return
-      const w = ctx.canvas.width = ctx.canvas.offsetWidth
-      const h = ctx.canvas.height = 200
+      const w = ctx.canvas.width = ctx.canvas.clientWidth
+      const h = ctx.canvas.height
+      const margin = { top: title ? 30 : 10, bottom: 22, left: 10, right: 10 }
+      const plotW = w - margin.left - margin.right
+      const plotH = h - margin.top - margin.bottom
+      if (plotW <= 0 || plotH <= 0) return
       ctx.clearRect(0, 0, w, h)
-      const vals = data.map(d => d[key])
-      const max = Math.max(...vals, 1)
-      const min = 0
+
+      // Title
+      if (title) {
+        ctx.fillStyle = '#6b7280'
+        ctx.font = '11px sans-serif'
+        ctx.fillText(title, margin.left, 15)
+      }
+
+      const vals = data.map(d => d[key] ?? 0)
+      let max = Math.max(...vals, 1)
+      let min = alignMinZero ? 0 : Math.min(...vals)
+      // Add 5% headroom at the top
+      const padding = (max - min) * 0.05 || 1
+      max += padding
+      const range = max - min || 1
       const pts = data.map((d, i) => ({
-        x: (i / (data.length - 1)) * w,
-        y: h - ((vals[i] - min) / (max - min)) * (h - 20) - 10
+        x: margin.left + (i / (data.length - 1)) * plotW,
+        y: margin.top + plotH - ((vals[i] - min) / range) * plotH
       }))
 
       // Grid
       ctx.strokeStyle = '#e5e7eb'
       ctx.lineWidth = 1
       for (let i = 0; i <= 4; i++) {
-        const y = 10 + (i / 4) * (h - 20)
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke()
+        const y = margin.top + (i / 4) * plotH
+        ctx.beginPath(); ctx.moveTo(margin.left, y); ctx.lineTo(margin.left + plotW, y); ctx.stroke()
+      }
+
+      // Y-axis labels (inside the plot area)
+      ctx.fillStyle = '#9ca3af'
+      ctx.font = '9px sans-serif'
+      ctx.textAlign = 'left'
+      for (let i = 0; i <= 4; i++) {
+        const y = margin.top + (i / 4) * plotH
+        const val = max - (i / 4) * range
+        ctx.fillText(val.toFixed(0), margin.left + 2, y + 3)
       }
 
       // Line
@@ -94,14 +140,38 @@ function metricsPage() {
       for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y)
       ctx.stroke()
 
-      // Label
+      // Label (right side, inside plot area)
       ctx.fillStyle = color
-      ctx.font = '12px sans-serif'
-      ctx.fillText(`${key}: ${vals[vals.length - 1].toFixed(1)}%`, 5, 14)
+      ctx.font = '11px sans-serif'
+      ctx.textAlign = 'right'
+      ctx.fillText(`${vals[vals.length - 1].toFixed(1)}${unit}`, margin.left + plotW - 4, margin.top + plotH - 4)
+      ctx.textAlign = 'left'
     },
     drawCharts() {
-      this.drawLine(this.cpuCtx, this.metrics, 'cpu_usage', '#3b82f6')
-      this.drawLine(this.memCtx, this.metrics, 'mem_usage_pct', '#10b981')
+      // CPU/Mem: auto-scale Y axis (no fixed 0)
+      this.drawLine(this.cpuCtx, this.metrics, 'cpu_usage', '#3b82f6', '%', 'CPU Usage', false)
+      this.drawLine(this.memCtx, this.metrics, 'mem_usage_pct', '#10b981', '%', 'Memory', false)
+
+      // Flatten GPU data into each metric point
+      const flatMetrics = this.metrics.map(m => {
+        const row = { ...m }
+        for (const gpu of (m.gpus || [])) {
+          row['gpu' + gpu.id + '_mem'] = gpu.memory_used_mb
+          row['gpu' + gpu.id + '_power'] = gpu.power_draw_w
+        }
+        return row
+      })
+
+      for (const item of this.gpuSubCharts) {
+        const canvas = document.getElementById(item.id)
+        const ctx = canvas?.getContext('2d')
+        if (!ctx) continue
+        const key = item.type === 'mem' ? 'gpu' + item.gpuId + '_mem' : 'gpu' + item.gpuId + '_power'
+        const color = item.type === 'mem' ? '#3b82f6' : '#ef4444'
+        const unit = item.type === 'mem' ? ' MiB' : ' W'
+        // GPU charts: align min to 0
+        this.drawLine(ctx, flatMetrics, key, color, unit, item.title, true)
+      }
     }
   }
 }

@@ -31,6 +31,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         host=cfg.get("host", "127.0.0.1"),
     )
     agent.start()
+    db.migrate_instance_names()
+    db.migrate_log_file_column()
     app.state.db = db
     app.state.agent = agent
     logger.info(f"llama-server-home started (config: {cfg['host']}:{cfg['port']})")
