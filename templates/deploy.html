@@ -19,7 +19,7 @@
 
     <div class="mb-4">
       <label class="block text-sm font-medium text-gray-700 mb-1">Model</label>
-      <select x-model="form.selectedModel" @change="onModelChange"
+      <select :value="form.selectedModel" @change="onModelChange($event.target.value)"
               class="w-full border rounded px-3 py-2 text-sm">
         <option value="">Select a model...</option>
         <template x-for="m in models" :key="m.model_name">
