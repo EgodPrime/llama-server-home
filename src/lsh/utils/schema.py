@@ -11,14 +11,11 @@ from pydantic import BaseModel, Field
 
 class Instance(BaseModel):
     instance_name: str
-    status: Optional[str] = None  # RUNNING|STOPPED|ERROR
+    status: Optional[str] = None
     pid: Optional[int] = None
-    host: Optional[str] = "127.0.0.1"
+    host: Optional[str] = "0.0.0.0"
     port: Optional[int] = None
-    model_path: str
-    mmproj_path: Optional[str] = None
     env: Optional[Dict[str, str]] = None
-    config: Optional[Dict[str, Any]] = None
     cmd_args: Optional[str] = None
     last_heartbeat: Optional[float] = None
     last_error: Optional[str] = None
@@ -29,15 +26,12 @@ class Instance(BaseModel):
 
 class InstanceTask(BaseModel):
     task_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    type: str  # DEPLOY | STOP | RESUME | MODIFY
+    type: str
     instance_name: str
     port: Optional[int] = None
-    model_path: Optional[str] = None
-    mmproj_path: Optional[str] = None
-    status: Optional[str] = None  # INIT | PROCESSING | FINISHED | FAILED
+    status: Optional[str] = None
     error_msg: Optional[str] = None
     env: Optional[Dict[str, str]] = None
-    config: Optional[Dict[str, Any]] = None
     cmd_args: Optional[str] = None
     created_at: Optional[float] = Field(default_factory=time.time)
     started_at: Optional[float] = None

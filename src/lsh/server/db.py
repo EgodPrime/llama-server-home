@@ -15,7 +15,6 @@ def load_config() -> Dict[str, Any]:
     with open(CONFIG_PATH, "r") as f:
         cfg = yaml.safe_load(f)
 
-    # Resolve ${ENV_VAR} syntax in values
     for key, value in cfg.items():
         if isinstance(value, str) and value.startswith("${") and value.endswith("}"):
             env_name = value[2:-1]
@@ -47,11 +46,9 @@ class Database:
                 instance_name TEXT PRIMARY KEY,
                 status TEXT,
                 pid INTEGER,
+                host TEXT,
                 port INTEGER,
-                model_path TEXT,
-                mmproj_path TEXT,
                 env TEXT,
-                config TEXT,
                 cmd_args TEXT,
                 last_heartbeat REAL,
                 last_error TEXT,
@@ -67,12 +64,9 @@ class Database:
                 type TEXT,
                 instance_name TEXT,
                 port INTEGER,
-                model_path TEXT,
-                mmproj_path TEXT,
                 status TEXT,
                 error_msg TEXT,
                 env TEXT,
-                config TEXT,
                 cmd_args TEXT,
                 created_at REAL,
                 started_at REAL,
@@ -105,10 +99,13 @@ class Database:
         logger.info("Database schema initialized")
 
     def _migrate_schema(self):
-        """Apply schema migrations (add missing columns)."""
         cur = self.conn.cursor()
         try:
             cur.execute("ALTER TABLE instances ADD COLUMN cmd_args TEXT")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cur.execute("ALTER TABLE instances ADD COLUMN host TEXT")
         except sqlite3.OperationalError:
             pass
         try:
@@ -119,8 +116,30 @@ class Database:
             cur.execute("DROP TABLE IF EXISTS profiles")
         except sqlite3.OperationalError:
             pass
-
-    # --- Generic helpers ---
+        try:
+            cur.execute("ALTER TABLE instances DROP COLUMN model_path")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cur.execute("ALTER TABLE instances DROP COLUMN mmproj_path")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cur.execute("ALTER TABLE instances DROP COLUMN config")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cur.execute("ALTER TABLE instance_tasks DROP COLUMN model_path")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cur.execute("ALTER TABLE instance_tasks DROP COLUMN mmproj_path")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cur.execute("ALTER TABLE instance_tasks DROP COLUMN config")
+        except sqlite3.OperationalError:
+            pass
 
     def _row_to_dict(self, row: sqlite3.Row) -> Dict[str, Any]:
         return dict(row)
@@ -148,18 +167,15 @@ class Database:
     def create_instance(self, instance: Dict[str, Any]):
         self._exec_commit(
             """INSERT INTO instances
-            (instance_name, status, pid, port, model_path, mmproj_path,
-             env, config, cmd_args, last_heartbeat, last_error, created_at, started_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (instance_name, status, pid, host, port, env, cmd_args, last_heartbeat, last_error, created_at, started_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 instance["instance_name"],
                 instance.get("status"),
                 instance.get("pid"),
+                instance.get("host"),
                 instance.get("port"),
-                instance.get("model_path"),
-                instance.get("mmproj_path"),
                 json.dumps(instance.get("env")) if instance.get("env") else None,
-                json.dumps(instance.get("config")) if instance.get("config") else None,
                 instance.get("cmd_args"),
                 instance.get("last_heartbeat"),
                 instance.get("last_error"),
@@ -172,7 +188,7 @@ class Database:
         set_parts = []
         params = []
         for key, value in updates.items():
-            if key in ("env", "config") and isinstance(value, dict):
+            if key == "env" and isinstance(value, dict):
                 value = json.dumps(value)
             set_parts.append(f"{key} = ?")
             params.append(value)
@@ -195,26 +211,21 @@ class Database:
     def create_instance_task(self, task: Dict[str, Any]):
         self._exec_commit(
             """INSERT INTO instance_tasks
-            (task_id, type, instance_name, port, model_path, mmproj_path,
-             status, env, config, cmd_args, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (task_id, type, instance_name, port, status, env, cmd_args, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 task.get("task_id", str(__import__("uuid").uuid4())),
                 task.get("type"),
                 task.get("instance_name"),
                 task.get("port"),
-                task.get("model_path"),
-                task.get("mmproj_path"),
                 task.get("status", "INIT"),
                 json.dumps(task.get("env")) if task.get("env") else None,
-                json.dumps(task.get("config")) if task.get("config") else None,
                 task.get("cmd_args"),
                 task.get("created_at", time.time()),
             ),
         )
 
     def claim_next_task(self) -> Optional[Dict[str, Any]]:
-        """Atomically claim the next INIT task using a new connection for isolation."""
         conn = sqlite3.connect(self.db_path, timeout=5.0)
         conn.row_factory = sqlite3.Row
         try:
@@ -305,7 +316,6 @@ class Database:
         self.conn.close()
 
 
-# Module-level singleton
 _db_instance: Optional[Database] = None
 
 

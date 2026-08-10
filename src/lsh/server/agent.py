@@ -48,8 +48,6 @@ class Agent:
         self._stop_event.set()
         logger.info("Agent stopping...")
 
-    # --- Instance maintenance ---
-
     def _maintenance_loop(self):
         while not self._stop_event.wait(timeout=self.maintenance_interval):
             try:
@@ -101,8 +99,6 @@ class Agent:
             content = f"Failed to read log file: {e}"
         self.db.update_instance_log(instance.instance_name, content)
 
-    # --- Metrics ---
-
     def _metrics_loop(self):
         while not self._stop_event.wait(timeout=self.metrics_interval):
             try:
@@ -126,8 +122,6 @@ class Agent:
         })
 
         self.db.trim_metrics(self.max_metrics)
-
-    # --- Task processing ---
 
     def _task_loop(self):
         while not self._stop_event.is_set():
@@ -162,25 +156,14 @@ class Agent:
                     "error_msg": err_msg,
                 })
 
-    def _build_cmd(self, model_path: str, mmproj_path: str | None, port: int, config: Dict[str, Any], cmd_args: str | None, instance_name: str) -> list[str]:
+    def _build_cmd(self, cmd_args: str | None, instance_name: str) -> list[str]:
         log_dir = Path(__file__).resolve().parents[2] / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
         log_file = log_dir / f"{instance_name}.log"
 
-        cmd = [
-            str(self.llama_path),
-            "--model", str(self.storage_dir / model_path),
-            "--host", self.host,
-            "--port", str(port),
-            "--log-file", str(log_file),
-        ]
-        if mmproj_path:
-            cmd += ["--mmproj", str(self.storage_dir / mmproj_path)]
-        for k, v in config.items():
-            cmd += [k, str(v)]
-        if cmd_args:
-            cmd += shlex.split(cmd_args)
-        return cmd
+        base = [str(self.llama_path), "--log-file", str(log_file)]
+        extra = shlex.split(cmd_args) if cmd_args else []
+        return base + extra
 
     def _start_process(self, cmd: list[str], env: Dict[str, str] | None, instance_name: str) -> subprocess.Popen:
         process = subprocess.Popen(
@@ -193,10 +176,10 @@ class Agent:
         return process
 
     def _deploy_instance(self, task: InstanceTask):
-        if not task.port or not task.model_path:
-            raise RuntimeError("DEPLOY task requires port and model_path")
+        if not task.cmd_args:
+            raise RuntimeError("DEPLOY task requires cmd_args")
 
-        cmd = self._build_cmd(task.model_path, task.mmproj_path, task.port, task.config or {}, task.cmd_args, task.instance_name)
+        cmd = self._build_cmd(task.cmd_args, task.instance_name)
         process = self._start_process(cmd, task.env, task.instance_name)
 
         created_time = time.time()
@@ -206,10 +189,7 @@ class Agent:
             "pid": process.pid,
             "host": self.host,
             "port": task.port,
-            "model_path": task.model_path,
-            "mmproj_path": task.mmproj_path,
             "env": task.env,
-            "config": task.config,
             "cmd_args": task.cmd_args,
             "last_heartbeat": created_time,
             "last_error": None,
@@ -241,11 +221,10 @@ class Agent:
             raise RuntimeError(f"Instance {task.instance_name} not found")
         instance = Instance.model_validate(instance_doc)
 
-        if not instance.port or not instance.model_path:
-            raise RuntimeError(f"Instance {task.instance_name} missing port or model_path")
+        if not instance.cmd_args:
+            raise RuntimeError(f"Instance {task.instance_name} missing cmd_args")
 
-        cmd_args = instance_doc.get("cmd_args") if isinstance(instance_doc, dict) else instance.cmd_args
-        cmd = self._build_cmd(instance.model_path, instance.mmproj_path, instance.port, instance.config or {}, cmd_args, task.instance_name)
+        cmd = self._build_cmd(instance.cmd_args, task.instance_name)
         process = self._start_process(cmd, instance.env, task.instance_name)
 
         self.db.update_instance(task.instance_name, {

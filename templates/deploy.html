@@ -11,10 +11,17 @@
              class="w-full border rounded px-3 py-2 text-sm bg-gray-100 font-mono text-gray-600">
     </div>
 
-    <div class="mb-4">
-      <label class="block text-sm font-medium text-gray-700 mb-1">Port</label>
-      <input type="number" x-model.number="form.port" min="1024" max="65535"
-             class="w-full border rounded px-3 py-2 text-sm">
+    <div class="grid grid-cols-2 gap-4 mb-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Host</label>
+        <input type="text" x-model="form.host" placeholder="0.0.0.0"
+               class="w-full border rounded px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Port</label>
+        <input type="number" x-model.number="form.port" min="1024" max="65535"
+               class="w-full border rounded px-3 py-2 text-sm">
+      </div>
     </div>
 
     <div class="mb-4">
@@ -28,7 +35,6 @@
       </select>
     </div>
 
-    <!-- File Selection (shown after model selected) -->
     <div class="mb-4" x-show="form.selectedModel">
       <label class="block text-sm font-medium text-gray-700 mb-1">Model File (.gguf)</label>
       <select x-model="form.model_path" @change="onModelFileChange"
@@ -40,7 +46,6 @@
       </select>
     </div>
 
-    <!-- mmproj Selection -->
     <div class="mb-4" x-show="form.selectedModel && mmprojFiles.length > 0">
       <label class="inline-flex items-center gap-2 mb-2 cursor-pointer">
         <input type="checkbox" x-model="useMmproj" class="rounded">
@@ -57,7 +62,6 @@
       </div>
     </div>
 
-    <!-- GPU Selection -->
     <div class="mb-4" x-show="gpus.length > 0">
       <label class="block text-sm font-medium text-gray-700 mb-1">GPU (sets CUDA_VISIBLE_DEVICES)</label>
       <div class="flex flex-wrap gap-3">
@@ -76,15 +80,14 @@
       </div>
     </div>
 
-    <!-- llama-server cmd args -->
     <div class="mb-4">
       <div class="flex items-center justify-between mb-1">
-        <label class="block text-sm font-medium text-gray-700">llama-server cmd args</label>
+        <label class="block text-sm font-medium text-gray-700">Extra llama-server args</label>
         <button type="button" @click="showHelpModal = true"
                 class="text-blue-600 hover:text-blue-800 font-bold text-lg w-6 h-6 flex items-center justify-center rounded-full hover:bg-blue-100"
                 title="llama-server --help">?</button>
       </div>
-      <textarea x-model="form.cmd_args" rows="3" placeholder="--n_ctx 4096 --n_gpu_layers -1"
+      <textarea x-model="form.extra_args" rows="3" placeholder="-ngl -1 --ctx-size 4096"
                 class="w-full border rounded px-3 py-2 text-sm font-mono"></textarea>
     </div>
 
@@ -147,16 +150,24 @@ function deployPage() {
       const port = this.form.port || 8080
       return `${model}_${gpus}_${port}`
     },
+    get storageDir() {
+      return '/home/egod/Projects/ggufs'
+    },
+    getAsAbs(path) {
+      if (!path) return ''
+      return this.storageDir + '/' + path
+    },
     get previewCmd() {
       const llamaPath = this.llamaPath
-      const modelPath = this.form.model_path || 'MODEL_PATH'
-      const mmprojPath = this.form.mmproj_path || null
-      const port = this.form.port || 8080
-      const cmdArgs = this.form.cmd_args || ''
+      const modelPath = this.form.model_path ? this.getAsAbs(this.form.model_path) : 'MODEL_PATH'
+      const mmprojPath = this.form.mmproj_path ? this.getAsAbs(this.form.mmproj_path) : null
+      const host = this.form.host || '0.0.0.0'
+      const port = this.form.port || 8021
+      const extraArgs = this.form.extra_args || ''
 
-      let cmd = `${llamaPath} --model ${modelPath} --host 127.0.0.1 --port ${port}`
-      if (mmprojPath) cmd += ` --mmproj ${mmprojPath}`
-      if (cmdArgs.trim()) cmd += ` ${cmdArgs.trim()}`
+      let cmd = `${llamaPath} --model "${modelPath}" --host ${host} --port ${port}`
+      if (mmprojPath) cmd += ` --mmproj "${mmprojPath}"`
+      if (extraArgs.trim()) cmd += ` ${extraArgs.trim()}`
 
       let env = ''
       if (this.selectedGpus.length > 0) {
@@ -189,11 +200,12 @@ function deployPage() {
 For full help, run: llama-server --help`,
     llamaPath: '/home/egod/Projects/llama.cpp/build/bin/llama-server',
     form: {
-      port: 8080,
+      host: '0.0.0.0',
+      port: 8021,
       selectedModel: '',
       model_path: '',
       mmproj_path: '',
-      cmd_args: '',
+      extra_args: '-ngl -1',
     },
     init() {
       this.fetchModels()
@@ -243,8 +255,20 @@ For full help, run: llama-server --help`,
       }
       return Object.keys(env).length > 0 ? env : null
     },
+    buildCmdArgs() {
+      const modelPath = this.getAsAbs(this.form.model_path)
+      const mmprojPath = this.getAsAbs(this.form.mmproj_path)
+      const host = this.form.host || '0.0.0.0'
+      const port = this.form.port || 8021
+      const extraArgs = this.form.extra_args || ''
+
+      let args = `--model "${modelPath}" --host ${host} --port ${port}`
+      if (mmprojPath) args += ` --mmproj "${mmprojPath}"`
+      if (extraArgs.trim()) args += ` ${extraArgs.trim()}`
+      return args.trim()
+    },
     async submit() {
-      if (!this.instanceName || this.instanceName === 'untitled_cpu_8080') { alert('Select a model first'); return }
+      if (!this.instanceName || this.instanceName === 'untitled_cpu_8021') { alert('Select a model first'); return }
       if (!this.form.model_path) { alert('Select a model file'); return }
       this.loading = true
       try {
@@ -253,9 +277,10 @@ For full help, run: llama-server --help`,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             instance_name: this.instanceName,
-            ...this.form,
             type: 'DEPLOY',
+            port: this.form.port,
             env: this.getEnv(),
+            cmd_args: this.buildCmdArgs(),
           }),
         })
         const data = await res.json()

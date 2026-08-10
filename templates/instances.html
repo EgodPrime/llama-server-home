@@ -13,8 +13,8 @@
         <tr>
           <th class="px-4 py-2 text-left">Name</th>
           <th class="px-4 py-2 text-left">Status</th>
+          <th class="px-4 py-2 text-left">Host</th>
           <th class="px-4 py-2 text-left">Port</th>
-          <th class="px-4 py-2 text-left">Model</th>
           <th class="px-4 py-2 text-left">Actions</th>
         </tr>
       </thead>
@@ -32,8 +32,8 @@
                     }"
                     x-text="inst.status || '-'"></span>
             </td>
+            <td class="px-4 py-2" x-text="inst.host || '-'"></td>
             <td class="px-4 py-2" x-text="inst.port || '-'"></td>
-            <td class="px-4 py-2 truncate max-w-xs" x-text="inst.model_path"></td>
             <td class="px-4 py-2 space-x-2">
               <button x-show="inst.status === 'RUNNING'"
                       @click="stop(inst.instance_name)"
@@ -42,9 +42,9 @@
                       @click="resume(inst.instance_name)"
                       class="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600">Resume</button>
               <button @click="showCmd(inst.instance_name)"
-                       class="text-xs bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600">Cmd</button>
+                      class="text-xs bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600">Cmd</button>
               <button @click="showLogs(inst.instance_name)"
-                       class="text-xs bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600">Logs</button>
+                      class="text-xs bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600">Logs</button>
               <button @click="deleteInst(inst.instance_name)"
                       class="text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">Delete</button>
             </td>

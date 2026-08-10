@@ -24,7 +24,6 @@ def parse_json_field(value: str | None) -> Dict[str, Any] | List[Any] | None:
 def format_instance(doc: Dict[str, Any]) -> Dict[str, Any]:
     doc = doc.copy()
     doc["env"] = parse_json_field(doc.get("env"))
-    doc["config"] = parse_json_field(doc.get("config"))
     doc["cmd_args"] = doc.get("cmd_args")
     return doc
 
@@ -32,10 +31,8 @@ def format_instance(doc: Dict[str, Any]) -> Dict[str, Any]:
 def format_task(doc: Dict[str, Any]) -> Dict[str, Any]:
     doc = doc.copy()
     doc["env"] = parse_json_field(doc.get("env"))
-    doc["config"] = parse_json_field(doc.get("config"))
     doc["cmd_args"] = doc.get("cmd_args")
     return doc
-
 
 
 def parse_gpus(gpus_info: str | None) -> List[Dict[str, Any]]:
@@ -81,34 +78,17 @@ async def get_instance_cmd(name: str, request: Request, db: Database = Depends(g
         raise HTTPException(status_code=404, detail="Instance not found")
 
     agent = request.app.state.agent
-    cfg = load_config()
 
-    model_path = inst.get("model_path")
-    mmproj_path = inst.get("mmproj_path")
-    port = inst.get("port")
-    config = parse_json_field(inst.get("config")) or {}
     cmd_args_raw = inst.get("cmd_args")
-
-    if not model_path or not port:
-        raise HTTPException(status_code=400, detail="Instance missing model_path or port")
+    if not cmd_args_raw:
+        raise HTTPException(status_code=400, detail="Instance missing cmd_args")
 
     log_dir = Path(__file__).resolve().parents[2] / "logs"
     log_file = log_dir / f"{name}.log"
-    host = cfg.get("host", "127.0.0.1")
 
-    cmd = [
-        str(agent.llama_path),
-        "--model", str(agent.storage_dir / model_path),
-        "--host", host,
-        "--port", str(port),
-        "--log-file", str(log_file),
-    ]
-    if mmproj_path:
-        cmd += ["--mmproj", str(agent.storage_dir / mmproj_path)]
-    for k, v in config.items():
-        cmd += [k, str(v)]
-    if cmd_args_raw:
-        cmd += shlex.split(cmd_args_raw)
+    base = [str(agent.llama_path), "--log-file", str(log_file)]
+    extra = shlex.split(cmd_args_raw)
+    cmd = base + extra
 
     return {"cmd": cmd}
 
@@ -133,10 +113,7 @@ class CreateTaskRequest(BaseModel):
     instance_name: str
     type: str = "DEPLOY"
     port: Optional[int] = None
-    model_path: Optional[str] = None
-    mmproj_path: Optional[str] = None
     env: Optional[Dict[str, str]] = None
-    config: Optional[Dict[str, Any]] = None
     cmd_args: Optional[str] = None
 
 
@@ -148,11 +125,8 @@ async def create_task(request: CreateTaskRequest, db: Database = Depends(get_db)
         "type": request.type,
         "instance_name": request.instance_name,
         "port": request.port,
-        "model_path": request.model_path,
-        "mmproj_path": request.mmproj_path,
         "status": "INIT",
         "env": request.env,
-        "config": request.config,
         "cmd_args": request.cmd_args,
     })
     return {"task_id": task_id, "message": "Task created"}
@@ -267,4 +241,3 @@ async def list_metrics(n: int = Query(default=20, ge=1, le=500), db: Database = 
         m["gpus"] = parse_gpus(m.get("gpus_info"))
         m.pop("gpus_info", None)
     return metrics
-
