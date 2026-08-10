@@ -1,9 +1,0 @@
-db_dir: "db_dir"
-storage_dir: "/home/egod/Projects/ggufs"
-llama_path: "/home/egod/Projects/llama.cpp/build/bin/llama-server"
-jwt_secret: "test-secret-key-for-development-only"
-maintenance_interval: 5
-metrics_interval: 5
-max_metrics: 200
-host: "0.0.0.0"
-port: 8000
