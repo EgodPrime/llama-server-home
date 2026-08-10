@@ -1,9 +1,9 @@
 import json
-import pathlib
 import shlex
 import subprocess
 import threading
 import time
+from pathlib import Path
 from typing import Any, Dict
 
 import psutil
@@ -91,7 +91,8 @@ class Agent:
                 self._update_instance_log(instance)
 
     def _update_instance_log(self, instance: Instance):
-        log_file = f"/tmp/{instance.instance_name}.log"
+        log_dir = Path(__file__).resolve().parents[2] / "logs"
+        log_file = log_dir / f"{instance.instance_name}.log"
         try:
             with open(log_file, "r") as f:
                 lines = f.readlines()[-50:]
@@ -161,12 +162,17 @@ class Agent:
                     "error_msg": err_msg,
                 })
 
-    def _build_cmd(self, model_path: str, mmproj_path: str | None, port: int, config: Dict[str, Any], cmd_args: str | None) -> list[str]:
+    def _build_cmd(self, model_path: str, mmproj_path: str | None, port: int, config: Dict[str, Any], cmd_args: str | None, instance_name: str) -> list[str]:
+        log_dir = Path(__file__).resolve().parents[2] / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = log_dir / f"{instance_name}.log"
+
         cmd = [
             str(self.llama_path),
             "--model", str(self.storage_dir / model_path),
             "--host", self.host,
             "--port", str(port),
+            "--log-file", str(log_file),
         ]
         if mmproj_path:
             cmd += ["--mmproj", str(self.storage_dir / mmproj_path)]
@@ -177,33 +183,20 @@ class Agent:
         return cmd
 
     def _start_process(self, cmd: list[str], env: Dict[str, str] | None, instance_name: str) -> subprocess.Popen:
-        log_file = f"/tmp/{instance_name}.log"
-
-        def _pipe_stdout(proc: subprocess.Popen):
-            try:
-                with open(log_file, "w") as f:
-                    for line in proc.stdout:
-                        f.write(line)
-                        f.flush()
-            except Exception as e:
-                logger.error(f"Log pipe error for {log_file}: {e}")
-
         process = subprocess.Popen(
             cmd,
             env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             start_new_session=True,
-            text=True,
         )
-        threading.Thread(target=_pipe_stdout, args=(process,), daemon=True).start()
         return process
 
     def _deploy_instance(self, task: InstanceTask):
         if not task.port or not task.model_path:
             raise RuntimeError("DEPLOY task requires port and model_path")
 
-        cmd = self._build_cmd(task.model_path, task.mmproj_path, task.port, task.config or {}, task.cmd_args)
+        cmd = self._build_cmd(task.model_path, task.mmproj_path, task.port, task.config or {}, task.cmd_args, task.instance_name)
         process = self._start_process(cmd, task.env, task.instance_name)
 
         created_time = time.time()
@@ -252,7 +245,7 @@ class Agent:
             raise RuntimeError(f"Instance {task.instance_name} missing port or model_path")
 
         cmd_args = instance_doc.get("cmd_args") if isinstance(instance_doc, dict) else instance.cmd_args
-        cmd = self._build_cmd(instance.model_path, instance.mmproj_path, instance.port, instance.config or {}, cmd_args)
+        cmd = self._build_cmd(instance.model_path, instance.mmproj_path, instance.port, instance.config or {}, cmd_args, task.instance_name)
         process = self._start_process(cmd, instance.env, task.instance_name)
 
         self.db.update_instance(task.instance_name, {
