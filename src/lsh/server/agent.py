@@ -12,6 +12,7 @@ from loguru import logger
 from lsh.server.db import Database
 from lsh.server.metrics import measure_cpu, measure_gpu, measure_memory
 from lsh.utils.schema import Instance, InstanceTask
+from lsh.utils.path_helper import LOG_DIR
 
 
 class Agent:
@@ -92,7 +93,7 @@ class Agent:
     def _update_instance_log(self, instance: Instance):
         log_file = instance.log_file
         if not log_file:
-            log_dir = Path(__file__).resolve().parents[2] / "logs"
+            log_dir = LOG_DIR
             log_file = log_dir / f"{instance.instance_name}.log"
         try:
             with open(log_file, "r") as f:
@@ -181,7 +182,7 @@ class Agent:
         if not task.cmd_args:
             raise RuntimeError("DEPLOY task requires cmd_args")
 
-        log_dir = Path(__file__).resolve().parents[2] / "logs"
+        log_dir = LOG_DIR
         log_dir.mkdir(parents=True, exist_ok=True)
         log_file = str(log_dir / f"{task.instance_name}.log")
 
@@ -334,7 +335,7 @@ class Agent:
                         if resolved.exists():
                             log_file_arg = str(resolved)
             else:
-                log_dir = Path(__file__).resolve().parents[2] / "logs"
+                log_dir = LOG_DIR
                 log_dir.mkdir(parents=True, exist_ok=True)
                 log_file_arg = str(log_dir / f"{instance_name}.log")
 
@@ -385,7 +386,7 @@ class Agent:
         if not instance.cmd_args:
             raise RuntimeError(f"Instance {task.instance_name} missing cmd_args")
 
-        log_dir = Path(__file__).resolve().parents[2] / "logs"
+        log_dir = LOG_DIR
         log_dir.mkdir(parents=True, exist_ok=True)
         log_file = instance.log_file
         if not log_file:

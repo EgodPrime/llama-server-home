@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
-from lsh.utils.path_helper import CONFIG_PATH
+from lsh.utils.path_helper import CONFIG_PATH, LOG_DIR
 
 
 def load_config() -> Dict[str, Any]:
@@ -227,7 +227,7 @@ class Database:
             logger.info(f"Instance migration complete: {migrated} renamed")
 
     def migrate_log_file_column(self):
-        log_dir = Path(__file__).resolve().parents[2] / "logs"
+        log_dir = LOG_DIR
         log_dir.mkdir(parents=True, exist_ok=True)
         instances = self.list_instances()
         migrated = 0

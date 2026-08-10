@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from lsh.server.db import Database, get_db, load_config
+from lsh.utils.path_helper import LOG_DIR
 
 
 api_router = APIRouter()
@@ -87,7 +88,7 @@ async def get_instance_cmd(name: str, request: Request, db: Database = Depends(g
 
     log_file = inst.get("log_file")
     if not log_file:
-        log_dir = Path(__file__).resolve().parents[2] / "logs"
+        log_dir = LOG_DIR
         log_file = str(log_dir / f"{name}.log")
 
     base = [str(agent.llama_path), "--log-file", log_file]
