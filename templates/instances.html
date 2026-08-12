@@ -2,6 +2,14 @@
 {% block title %}Instances - llama-server-home{% endblock %}
 {% block content %}
 <div x-data="instancesPage()" x-init="init()" class="max-w-6xl mx-auto">
+  <!-- Testing overlay: blocks all interaction while a perf test is running -->
+  <div x-show="testingName !== ''" class="fixed inset-0 bg-black bg-opacity-30 z-40 flex items-center justify-center" x-cloak>
+    <div class="bg-white rounded-lg px-6 py-4 shadow-lg text-sm flex items-center gap-3">
+      <div class="w-5 h-5 border-2 border-teal-500 border-t-transparent rounded-full animate-spin"></div>
+      <span>Testing <span x-text="testingName"></span>, please wait...</span>
+    </div>
+  </div>
+
   <div class="flex justify-between items-center mb-6">
     <h1 class="text-2xl font-bold">Instances</h1>
     <a href="/deploy" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">+ New Instance</a>
@@ -40,6 +48,13 @@
               <button x-show="inst.status === 'RUNNING'"
                       @click="stop(inst.instance_name)"
                       class="text-xs bg-yellow-500 text-white px-2 py-1 rounded hover:bg-yellow-600">Stop</button>
+              <button x-show="inst.status === 'RUNNING'"
+                      @click="runTest(inst.instance_name)"
+                      :disabled="testingName !== ''"
+                      class="text-xs bg-teal-500 text-white px-2 py-1 rounded hover:bg-teal-600 disabled:opacity-50">
+              <span x-show="testingName !== inst.instance_name">Test</span>
+              <span x-show="testingName === inst.instance_name">Testing...</span>
+            </button>
               <button x-show="inst.status === 'STOPPED' || inst.status === 'ERROR'"
                       @click="resume(inst.instance_name)"
                       class="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600">Resume</button>
@@ -47,8 +62,11 @@
                       class="text-xs bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600">Cmd</button>
               <button @click="showLogs(inst.instance_name)"
                       class="text-xs bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600">Logs</button>
-              <button @click="deleteInst(inst.instance_name)"
-                      class="text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">Delete</button>
+               <button x-show="inst.status === 'STOPPED' || inst.status === 'ERROR'"
+                       @click="openEdit(inst)"
+                       class="text-xs bg-purple-500 text-white px-2 py-1 rounded hover:bg-purple-600">Edit</button>
+               <button @click="deleteInst(inst.instance_name)"
+                       class="text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">Delete</button>
             </td>
           </tr>
         </template>
@@ -74,9 +92,9 @@
     </div>
   </div>
 
-  <!-- Logs Modal -->
-  <div x-show="showLogModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-       x-cloak @click.self="showLogModal = false">
+   <!-- Logs Modal -->
+   <div x-show="showLogModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+        x-cloak @click.self="showLogModal = false">
     <div class="bg-white rounded-lg p-4 w-full max-w-2xl max-h-[80vh] flex flex-col">
       <div class="flex justify-between items-center mb-2">
         <div class="flex items-center gap-2">
@@ -87,6 +105,77 @@
       </div>
       <pre class="bg-gray-900 text-green-400 text-xs p-3 rounded flex-1 overflow-auto whitespace-pre-wrap"
            x-text="logContent"></pre>
+    </div>
+  </div>
+
+  <!-- Edit Modal -->
+  <div x-show="showEditModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+       x-cloak @click.self="showEditModal = false">
+    <div class="bg-white rounded-lg p-4 w-full max-w-3xl max-h-[80vh] flex flex-col">
+      <div class="flex justify-between items-center mb-2">
+        <h3 class="font-bold">Edit Instance: <span x-text="editInstanceName"></span></h3>
+        <button @click="showEditModal = false" class="text-gray-500 hover:text-gray-700">&times;</button>
+      </div>
+      <div class="flex-1 overflow-auto space-y-3">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Cmd Args</label>
+          <textarea x-model="editForm.cmd_args" rows="4"
+                    class="w-full border rounded px-3 py-2 text-xs font-mono"></textarea>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Host</label>
+            <input type="text" x-model="editForm.host"
+                   class="w-full border rounded px-3 py-2 text-xs">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Port</label>
+            <input type="number" x-model.number="editForm.port" min="1" max="65535"
+                   class="w-full border rounded px-3 py-2 text-xs">
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Env (JSON)</label>
+          <textarea x-model="editForm.env_json" rows="3"
+                    class="w-full border rounded px-3 py-2 text-xs font-mono"></textarea>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 mt-4">
+        <button @click="showEditModal = false"
+                class="px-4 py-2 rounded border text-sm hover:bg-gray-50">Cancel</button>
+        <button @click="saveEdit()" :disabled="editLoading"
+                class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 text-sm disabled:opacity-50">
+          <span x-show="!editLoading">Save</span>
+          <span x-show="editLoading">Saving...</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Test Modal -->
+  <div x-show="showTestModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+       x-cloak @click.self="showTestModal = false">
+    <div class="bg-white rounded-lg p-6 w-full max-w-md">
+      <h3 class="font-bold mb-4">Test Result</h3>
+      <template x-if="testResult">
+        <div class="space-y-2 text-sm">
+          <div class="bg-gray-100 rounded p-3 flex justify-between items-center">
+            <span>Prefill (<span x-text="testResult.prefill.tokens"></span> tokens)</span>
+            <span class="font-bold" x-text="testResult.prefill.tps + ' tps'"></span>
+          </div>
+          <div class="bg-gray-100 rounded p-3 flex justify-between items-center">
+            <span>Decode (<span x-text="testResult.decode.tokens"></span> tokens)</span>
+            <span class="font-bold" x-text="testResult.decode.tps + ' tps'"></span>
+          </div>
+        </div>
+      </template>
+      <template x-if="testError && !testResult">
+        <div class="text-red-600 text-sm" x-text="testError"></div>
+      </template>
+      <div class="mt-4 flex justify-end">
+        <button @click="showTestModal = false"
+                class="px-4 py-2 rounded border text-sm hover:bg-gray-50">Close</button>
+      </div>
     </div>
   </div>
 </div>
@@ -103,6 +192,19 @@ function instancesPage() {
     showLogModal: false,
     logInstanceName: '',
     logContent: '',
+    showEditModal: false,
+    editInstanceName: '',
+    editLoading: false,
+    editForm: {
+      cmd_args: '',
+      host: '',
+      port: '',
+      env_json: '{}'
+    },
+    testingName: '',
+    showTestModal: false,
+    testResult: null,
+    testError: '',
     init() {
       this.fetchData()
       setInterval(() => this.fetchData(), 2000)
@@ -145,6 +247,68 @@ function instancesPage() {
         const data = await res.json()
         this.logContent = data.content || ''
       } catch (e) { this.logContent = 'Error loading logs' }
+    },
+    async runTest(name) {
+      if (this.testingName !== '') return
+      this.testingName = name
+      try {
+        const res = await fetch(`/api/instances/${name}/test`, { method: 'POST' })
+        const data = await res.json()
+        if (res.ok) {
+          this.testResult = data
+          this.testError = ''
+        } else {
+          this.testResult = null
+          this.testError = data.detail || 'Test failed'
+        }
+      } catch (e) {
+        this.testResult = null
+        this.testError = e.message
+      } finally {
+        this.testingName = ''
+        this.showTestModal = true
+      }
+    },
+    openEdit(inst) {
+      this.editInstanceName = inst.instance_name
+      this.editForm = {
+        cmd_args: inst.cmd_args || '',
+        host: inst.host || '',
+        port: inst.port || '',
+        env_json: inst.env ? JSON.stringify(inst.env, null, 2) : '{}'
+      }
+      this.showEditModal = true
+    },
+    async saveEdit() {
+      this.editLoading = true
+      try {
+        let env = null
+        if (this.editForm.env_json.trim() !== '{}') {
+          env = JSON.parse(this.editForm.env_json)
+        }
+        const res = await fetch(`/api/instances/${this.editInstanceName}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cmd_args: this.editForm.cmd_args,
+            host: this.editForm.host,
+            port: this.editForm.port,
+            env: env
+          })
+        })
+        const data = await res.json()
+        if (res.ok) {
+          alert('Instance updated successfully')
+          this.showEditModal = false
+          await this.fetchData()
+        } else {
+          alert('Error: ' + (data.detail || 'Failed to update instance'))
+        }
+      } catch (e) {
+        alert('Error: ' + e.message)
+      } finally {
+        this.editLoading = false
+      }
     }
   }
 }

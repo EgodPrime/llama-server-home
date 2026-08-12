@@ -38,6 +38,7 @@ class Agent:
     def start(self):
         logger.info("Agent starting...")
         self._discover_instances()
+        self._dedupe_instances()
         t_maintenance = threading.Thread(target=self._maintenance_loop, daemon=True)
         t_metrics = threading.Thread(target=self._metrics_loop, daemon=True)
         t_tasks = threading.Thread(target=self._task_loop, daemon=True)
@@ -225,6 +226,7 @@ class Agent:
 
     def _discover_instances(self):
         db_pids = {i["pid"] for i in self.db.list_instances()}
+        discovered_count = 0
 
         for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'environ']):
             try:
@@ -233,8 +235,6 @@ class Agent:
                 continue
 
             if not cmdline:
-                continue
-            if any('llama-server-home' in c for c in cmdline):
                 continue
             if not any('llama-server' in c for c in cmdline):
                 continue
@@ -339,7 +339,7 @@ class Agent:
                 log_dir.mkdir(parents=True, exist_ok=True)
                 log_file_arg = str(log_dir / f"{instance_name}.log")
 
-            final_cmd_args = ' '.join(resolved_cmdline)
+            final_cmd_args = ' '.join(shlex.quote(t) for t in resolved_cmdline)
 
             try:
                 started_at = proc.create_time()
@@ -363,6 +363,7 @@ class Agent:
                     "started_at": started_at,
                 })
                 logger.info(f"Discovered instance {instance_name} (pid={proc.pid})")
+                discovered_count += 1
             elif existing["pid"] != proc.pid:
                 self.db.update_instance(instance_name, {
                     "pid": proc.pid,
@@ -375,7 +376,39 @@ class Agent:
                 })
                 logger.warning(f"Instance {instance_name} PID changed: {existing['pid']} -> {proc.pid}")
 
-        logger.info(f"Discovery complete: {len(db_pids)} existing instance(s)")
+        logger.info(f"Discovery complete: {discovered_count} discovered, {len(db_pids)} previously in DB")
+
+    def _dedupe_instances(self):
+        dirs = {d.name for d in self.storage_dir.iterdir() if d.is_dir()}
+
+        by_pid: Dict[int, Dict[str, Any]] = {}
+        for inst in self.db.list_instances():
+            pid = inst.get("pid")
+            if pid:
+                by_pid.setdefault(pid, []).append(inst)
+
+        removed = 0
+        for pid, group in by_pid.items():
+            if len(group) <= 1:
+                continue
+            keep = None
+            for inst in group:
+                name = inst.get("instance_name") or ""
+                if any(name.startswith(d + "_") for d in dirs):
+                    keep = inst
+                    break
+            if keep is None:
+                keep = group[0]
+            for inst in group:
+                if inst["instance_name"] != keep["instance_name"]:
+                    self.db.delete_instance(inst["instance_name"])
+                    logger.info(
+                        f"Dedupe: removed duplicate {inst['instance_name']} (kept {keep['instance_name']})"
+                    )
+                    removed += 1
+
+        if removed:
+            logger.info(f"Dedupe complete: removed {removed} duplicate instance(s)")
 
     def _resume_instance(self, task: InstanceTask):
         instance_doc = self.db.get_instance(task.instance_name)

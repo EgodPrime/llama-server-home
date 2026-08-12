@@ -92,10 +92,80 @@ async def get_instance_cmd(name: str, request: Request, db: Database = Depends(g
         log_file = str(log_dir / f"{name}.log")
 
     base = [str(agent.llama_path), "--log-file", log_file]
-    extra = shlex.split(cmd_args_raw)
-    cmd = base + extra
+    tokens = shlex.split(cmd_args_raw)
+    cmd = base + tokens
+    return {"cmd": [shlex.quote(c) for c in cmd]}
 
-    return {"cmd": cmd}
+
+class PatchInstanceRequest(BaseModel):
+    cmd_args: Optional[str] = None
+    host: Optional[str] = None
+    port: Optional[int] = None
+    env: Optional[Dict[str, str]] = None
+
+
+@api_router.patch("/api/instances/{name}")
+async def patch_instance(name: str, body: PatchInstanceRequest, db: Database = Depends(get_db)):
+    inst = db.get_instance(name)
+    if not inst:
+        raise HTTPException(status_code=404, detail="Instance not found")
+    if inst["status"] not in ("STOPPED", "ERROR"):
+        raise HTTPException(status_code=400, detail="Only STOPPED or ERROR instances can be edited")
+
+    update = body.model_dump(exclude_none=True)
+    db.update_instance(name, update)
+    return {"message": f"Instance {name} updated"}
+
+
+def _resolve_test_url(host: str, port: int) -> str:
+    h = host or "127.0.0.1"
+    if h in ("0.0.0.0", "::", ""):
+        h = "127.0.0.1"
+    return f"http://{h}:{port}/v1/completions"
+
+
+@api_router.post("/api/instances/{name}/test")
+async def test_instance(name: str, db: Database = Depends(get_db)):
+    import httpx
+    import time
+
+    inst = db.get_instance(name)
+    if not inst:
+        raise HTTPException(status_code=404, detail="Instance not found")
+    if inst["status"] != "RUNNING":
+        raise HTTPException(status_code=400, detail="Only RUNNING instances can be tested")
+
+    url = _resolve_test_url(inst.get("host"), inst.get("port"))
+    prompt_text = "This is a performance test sentence. " * 80
+
+    def tps(tokens: int, elapsed: float) -> float:
+        return (tokens / elapsed) if elapsed > 0 else 0.0
+
+    try:
+        with httpx.Client(timeout=300.0) as client:
+            t0 = time.time()
+            r1 = client.post(url, json={"prompt": prompt_text, "max_tokens": 1, "temperature": 0, "n": 1})
+            r1.raise_for_status()
+            d1 = r1.json()
+            elapsed1 = time.time() - t0
+            p_tokens = d1.get("usage", {}).get("prompt_tokens") or 0
+            prefill_tps = tps(p_tokens, elapsed1)
+
+            t1 = time.time()
+            r2 = client.post(url, json={"prompt": "Hello", "max_tokens": 256, "temperature": 0, "n": 1})
+            r2.raise_for_status()
+            d2 = r2.json()
+            elapsed2 = time.time() - t1
+            c_tokens = d2.get("usage", {}).get("completion_tokens") or 0
+            decode_tps = tps(c_tokens, elapsed2)
+
+        return {
+            "instance_name": name,
+            "prefill": {"tokens": p_tokens, "elapsed_s": round(elapsed1, 2), "tps": round(prefill_tps, 2)},
+            "decode": {"tokens": c_tokens, "elapsed_s": round(elapsed2, 2), "tps": round(decode_tps, 2)},
+        }
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Instance request failed: {e}")
 
 
 @api_router.delete("/api/instances/{name}")
